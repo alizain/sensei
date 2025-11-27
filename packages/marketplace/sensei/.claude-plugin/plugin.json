@@ -1,0 +1,21 @@
+{
+	"agents": ["./agents/sensei.md"],
+	"author": {
+		"name": "Alizain Feerasta"
+	},
+	"description": "Documentation research agent with Scout for repository exploration",
+	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
+	"license": "MIT",
+	"mcpServers": {
+		"scout": {
+			"headers": {
+				"Authorization": "Bearer ${SENSEI_API_KEY}"
+			},
+			"type": "http",
+			"url": "${SENSEI_HOST:-http://localhost:8000}/scout/mcp"
+		}
+	},
+	"name": "sensei",
+	"repository": "https://github.com/alizain/sensei",
+	"version": "1.0.0"
+}

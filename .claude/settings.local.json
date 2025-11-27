@@ -1,0 +1,27 @@
+{
+	"permissions": {
+		"allow": [
+			"mcp__tavily__tavily_extract",
+			"Bash(mkdir:*)",
+			"Bash(touch:*)",
+			"Bash(uv run pytest:*)",
+			"Bash(uv sync:*)",
+			"mcp__tavily__tavily_search",
+			"mcp__context7__resolve-library-id",
+			"mcp__context7__get-library-docs",
+			"Bash(http:*)",
+			"Skill(superpowers:systematic-debugging)",
+			"mcp__sensei__query",
+			"Skill(system-thinking-before-implementing)",
+			"WebFetch(domain:github.com)",
+			"mcp__beads__set_context",
+			"mcp__beads__create",
+			"mcp__beads__dep",
+			"mcp__beads__ready",
+			"mcp__beads__close",
+			"mcp__beads__update"
+		],
+		"ask": [],
+		"deny": []
+	}
+}

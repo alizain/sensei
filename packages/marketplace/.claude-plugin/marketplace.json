@@ -1,0 +1,13 @@
+{
+	"name": "sensei-marketplace",
+	"owner": {
+		"name": "Alizain Feerasta"
+	},
+	"plugins": [
+		{
+			"description": "Documentation research agent with Scout for repository exploration",
+			"name": "sensei",
+			"source": "./sensei"
+		}
+	]
+}

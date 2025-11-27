@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  sensei-api:
+    build: .
+    command: uv run sensei api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./sensei.db:/app/sensei.db
+    restart: unless-stopped
+
+  sensei-mcp:
+    build: .
+    command: uv run sensei mcp
+    env_file:
+      - .env
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
