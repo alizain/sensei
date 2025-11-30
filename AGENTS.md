@@ -2,6 +2,10 @@
 for issue tracking. Use `bd` commands instead of markdown TODOs.
 See AGENTS.md for workflow details.
 
+## Coding style
+
+- **NEVER USE LAZY IMPORTS**. NEVER. Always use module-level imports. If you're facing cycles, use the system-thinking-before-implementing to figure out the correct way to solve the cycle. LAZY IMPORTS ARE ALWAYS A HACK. NEVER USE THEM. NO MATTER WHAT THE REASON.
+
 ## Environment Variables
 
 **NEVER suggest modifying environment variables or creating .env files.** Configuration is managed through `sensei/config.py` with hardcoded defaults. The user manages their own environment—do not tell them to set, export, or modify any environment variables.

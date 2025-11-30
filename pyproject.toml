@@ -15,8 +15,10 @@ classifiers = [
 
 dependencies = [
     "aider-chat>=0.86.1",
-    "aiosqlite>=0.21.0",
+    "alembic>=1.14.0",
     "anthropic>=0.75.0",
+    "asyncpg>=0.30.0",
+    "crawlee[httpx]>=0.6.0",
     "fastapi-cli[standard]>=0.0.16",
     "fastapi[standard]>=0.122.0",
     "fastmcp>=2.13.1",
@@ -28,6 +30,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "ruff>=0.14.6",
     "sqlalchemy[asyncio]>=2.0.44",
+    "tldextract>=5.1.0",
     "uvicorn[standard]>=0.38.0",
 ]
 
@@ -37,6 +40,7 @@ Repository = "https://github.com/alizain/sensei"
 
 [project.scripts]
 scout = "sensei.scout:scout.run"
+kura = "sensei.kura:kura.run"
 
 [project.optional-dependencies]
 dev = [

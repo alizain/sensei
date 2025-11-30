@@ -1,0 +1,21 @@
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.idea/
+.vscode/
+
+# Project specific
+.beads/
+.scout/
+.env
+*.db
+sensei.db
+
+# Tests
+tests/
+
+# Docs (keep README.md for pyproject.toml)
+docs/

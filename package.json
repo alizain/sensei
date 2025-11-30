@@ -1,19 +1,19 @@
 {
 	"dependencies": {},
 	"devDependencies": {
-		"@biomejs/biome": "^2.3.6",
+		"@biomejs/biome": "^2.3.8",
 		"cheerio": "^1.1.2",
 		"consola": "^3.4.2",
 		"semver": "^7.7.3",
 		"turbo": "^2.6.1",
 		"typescript": "^5.9.3",
-		"vitest": "^4.0.12"
+		"vitest": "^4.0.14"
 	},
 	"engines": {
 		"node": ">=20.0.0"
 	},
 	"name": "@sensei",
-	"packageManager": "npm@11.6.3",
+	"packageManager": "npm@11.6.4",
 	"private": true,
 	"scripts": {
 		"biome": "npx biome check --fix .",
