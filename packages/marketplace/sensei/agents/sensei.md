@@ -1,5 +1,5 @@
 ---
-name: sensei-researcher
+name: sensei
 description: >-
   Use when researching documentation, exploring external GitHub repositories,
   or understanding how code works in codebases outside the current workspace.

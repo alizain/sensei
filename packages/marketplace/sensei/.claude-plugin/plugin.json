@@ -1,5 +1,7 @@
 {
-	"agents": ["./agents/sensei.md"],
+	"agents": [
+		"./agents/sensei.md"
+	],
 	"author": {
 		"name": "Alizain Feerasta"
 	},
@@ -14,12 +16,16 @@
 	"license": "MIT",
 	"mcpServers": {
 		"scout": {
-			"type": "stdio",
+			"args": [
+				"--from",
+				"sensei-ai",
+				"scout"
+			],
 			"command": "uvx",
-			"args": ["--from", "sensei-ai", "scout"]
+			"type": "stdio"
 		}
 	},
 	"name": "sensei",
 	"repository": "https://github.com/alizain/sensei",
-	"version": "1.0.0"
+	"version": "1.0.1"
 }
