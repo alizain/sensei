@@ -3,34 +3,13 @@
 import logging
 from datetime import datetime
 from textwrap import dedent
-from typing import Dict, Optional
 
 from pydantic_ai import RunContext
 
 from sensei.deps import Deps
+from sensei.types import NoResults, Success, ToolError
 
 logger = logging.getLogger(__name__)
-
-# =============================================================================
-# In-memory storage
-# =============================================================================
-
-_exec_plans: Dict[str, str] = {}
-
-
-def get_plan(query_id: str) -> Optional[str]:
-	"""Retrieve the ExecPlan for a query if it exists."""
-	return _exec_plans.get(query_id)
-
-
-def set_plan(query_id: str, plan: str) -> None:
-	"""Store or replace the ExecPlan for a query."""
-	_exec_plans[query_id] = plan
-
-
-def clear_plan(query_id: str) -> None:
-	"""Remove the ExecPlan for a query."""
-	_exec_plans.pop(query_id, None)
 
 
 # =============================================================================
@@ -80,34 +59,34 @@ EXEC_PLAN_TEMPLATE = dedent(
 )
 
 
-async def add_exec_plan(ctx: RunContext[Deps]) -> str:
+async def add_exec_plan(ctx: RunContext[Deps]) -> Success[str]:
 	"""Add an ExecPlan template to guide your research work."""
-	if not ctx.deps or not ctx.deps.query_id:
-		logger.warning("Cannot create ExecPlan: missing query_id")
-		return "Error: missing query_id; cannot create ExecPlan."
+	if not ctx.deps:
+		logger.warning("Cannot create ExecPlan: missing deps")
+		raise ToolError("Missing deps; cannot create ExecPlan.")
 
-	logger.info(f"Creating ExecPlan for query_id={ctx.deps.query_id}")
+	logger.info("Creating ExecPlan")
 	plan = EXEC_PLAN_TEMPLATE.format(timestamp=datetime.now().isoformat())
-	set_plan(ctx.deps.query_id, plan)
-	logger.debug(f"ExecPlan created for query_id={ctx.deps.query_id}")
+	ctx.deps.exec_plan = plan
+	logger.debug("ExecPlan created")
 
-	return "ExecPlan template added to your instructions. Use update_exec_plan() to fill it in and track your progress."
+	return Success(
+		"ExecPlan template added to your instructions. Use update_exec_plan() to fill it in and track your progress."
+	)
 
 
-async def update_exec_plan(ctx: RunContext[Deps], updated_plan: str) -> str:
+async def update_exec_plan(ctx: RunContext[Deps], updated_plan: str) -> Success[str] | NoResults:
 	"""Update your ExecPlan with progress, decisions, and discoveries."""
-	if not ctx.deps or not ctx.deps.query_id:
-		logger.warning("Cannot update ExecPlan: missing query_id")
-		return "Error: missing query_id; cannot update ExecPlan."
+	if not ctx.deps:
+		logger.warning("Cannot update ExecPlan: missing deps")
+		raise ToolError("Missing deps; cannot update ExecPlan.")
 
-	current_plan = get_plan(ctx.deps.query_id)
+	if not ctx.deps.exec_plan:
+		logger.warning("Cannot update ExecPlan: no plan exists")
+		return NoResults()
 
-	if not current_plan:
-		logger.warning(f"Cannot update ExecPlan: no plan exists for query_id={ctx.deps.query_id}")
-		return "No ExecPlan exists yet. Create one with add_exec_plan() first."
+	logger.info("Updating ExecPlan")
+	ctx.deps.exec_plan = updated_plan
+	logger.debug(f"ExecPlan updated, length={len(updated_plan)}")
 
-	logger.info(f"Updating ExecPlan for query_id={ctx.deps.query_id}")
-	set_plan(ctx.deps.query_id, updated_plan)
-	logger.debug(f"ExecPlan updated for query_id={ctx.deps.query_id}, length={len(updated_plan)}")
-
-	return "ExecPlan updated. Continue your research."
+	return Success("ExecPlan updated. Continue your research.")

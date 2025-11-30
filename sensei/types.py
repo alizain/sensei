@@ -4,11 +4,15 @@ This module contains:
 - Exception hierarchy for structured error handling
 - Result types for tool return values
 - Domain models shared across layers
+- Value objects for normalization
 """
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Generic, TypeVar
+from uuid import UUID
 
+import tldextract
 from pydantic import BaseModel, Field
 
 # =============================================================================
@@ -62,6 +66,59 @@ class NoResults:
 
 
 # =============================================================================
+# Value Objects
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Domain:
+	"""Normalized domain value object using public suffix resolution.
+
+	Extracts the registrable domain (domain + public suffix) from any URL
+	or domain string. Uses the Public Suffix List for accurate extraction.
+
+	Examples:
+	    Domain("https://www.example.com/path") -> Domain("example.com")
+	    Domain("api.docs.example.com") -> Domain("example.com")
+	    Domain("forums.bbc.co.uk") -> Domain("bbc.co.uk")
+	    Domain("react.dev") -> Domain("react.dev")
+	"""
+
+	value: str
+
+	def __post_init__(self) -> None:
+		normalized = self._normalize(self.value)
+		object.__setattr__(self, "value", normalized)
+
+	@staticmethod
+	def _normalize(raw: str) -> str:
+		# tldextract handles URLs, domains, and edge cases
+		extracted = tldextract.extract(raw)
+		# top_domain_under_public_suffix gives us "domain.suffix" (e.g., "bbc.co.uk")
+		registrable = extracted.top_domain_under_public_suffix
+		if registrable:
+			return registrable.lower()
+		# Fallback for invalid/localhost domains
+		return (extracted.domain or raw).lower()
+
+	def __str__(self) -> str:
+		return self.value
+
+	@classmethod
+	def from_url(cls, url: str) -> "Domain":
+		"""Create Domain from a full URL."""
+		return cls(url)
+
+
+class SaveResult(Enum):
+	"""Result of a save operation that may insert, update, or skip."""
+
+	INSERTED = "inserted"
+	UPDATED = "updated"
+	SKIPPED = "skipped"  # Content unchanged
+
+
+# =============================================================================
 # Domain Models
 # =============================================================================
 
@@ -69,27 +126,27 @@ class NoResults:
 class QueryResult(BaseModel):
 	"""Result of a query operation."""
 
-	query_id: str
-	markdown: str
+	query_id: UUID = Field(..., description="Unique identifier for this query")
+	markdown: str = Field(..., description="Markdown documentation with code examples")
 
 
 class Rating(BaseModel):
 	"""Rating for a query response."""
 
-	query_id: str = Field(..., description="The query ID to rate")
-	correctness: int = Field(..., ge=1, le=5)
-	relevance: int = Field(..., ge=1, le=5)
-	usefulness: int = Field(..., ge=1, le=5)
-	reasoning: str | None = None
-	agent_model: str | None = None
-	agent_system: str | None = None
-	agent_version: str | None = None
+	query_id: UUID = Field(..., description="The query ID to rate")
+	correctness: int = Field(..., ge=1, le=5, description="Is the information/code correct? (1-5)")
+	relevance: int = Field(..., ge=1, le=5, description="Did it answer the question? (1-5)")
+	usefulness: int = Field(..., ge=1, le=5, description="Did it help solve the problem? (1-5)")
+	reasoning: str | None = Field(None, description="Why these ratings? What changed from last time?")
+	agent_model: str | None = Field(None, description="Model identifier")
+	agent_system: str | None = Field(None, description="Agent system name")
+	agent_version: str | None = Field(None, description="Agent system version")
 
 
 class CacheHit(BaseModel):
 	"""A cache search result summary."""
 
-	query_id: str
+	query_id: UUID
 	query_truncated: str = Field(..., description="First 100 chars of query")
 	age_days: int
 	library: str | None = None
@@ -99,7 +156,7 @@ class CacheHit(BaseModel):
 class SubSenseiResult(BaseModel):
 	"""Result from spawning a sub-sensei."""
 
-	query_id: str
+	query_id: UUID
 	response_markdown: str
 	from_cache: bool
 	age_days: int | None = None

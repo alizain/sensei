@@ -1,7 +1,5 @@
 """SQLAlchemy database models for Sensei."""
 
-from datetime import UTC, datetime
-
 from sqlalchemy import (
 	CheckConstraint,
 	Column,
@@ -10,38 +8,60 @@ from sqlalchemy import (
 	Integer,
 	String,
 	Text,
+	func,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import declarative_base, declared_attr
+
+
+class TimestampMixin:
+	"""Mixin providing inserted_at and updated_at columns with PostgreSQL defaults."""
+
+	@declared_attr
+	def inserted_at(cls):
+		return Column(
+			DateTime(timezone=True),
+			nullable=False,
+			server_default=func.now(),
+		)
+
+	@declared_attr
+	def updated_at(cls):
+		return Column(
+			DateTime(timezone=True),
+			nullable=False,
+			server_default=func.now(),
+			onupdate=func.now(),
+		)
+
 
 Base = declarative_base()
 
 
-class Query(Base):
+class Query(TimestampMixin, Base):
 	"""Stores queries sent to Sensei and their responses."""
 
 	__tablename__ = "queries"
 
-	query_id = Column(String, primary_key=True)
+	id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
 	query = Column(Text, nullable=False)
 	language = Column(String, nullable=True)  # Programming language filter
 	library = Column(String, nullable=True)  # Library/framework name
 	version = Column(String, nullable=True)  # Version specification
 	output = Column(Text, nullable=False)  # Final text output from agent
 	messages = Column(Text, nullable=True)  # JSON: all intermediate messages (tool calls, results)
-	sources_used = Column(Text, nullable=True)  # JSON string array of source names
-	created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 	# Cache hierarchy fields
-	parent_query_id = Column(String, ForeignKey("queries.query_id"), nullable=True)
-	depth = Column(Integer, default=0, nullable=False)
+	parent_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=True)
+	depth = Column(Integer, server_default="0", nullable=False)
 
 
-class Rating(Base):
+class Rating(TimestampMixin, Base):
 	"""Stores user ratings for query responses (multi-dimensional)."""
 
 	__tablename__ = "ratings"
 
-	id = Column(Integer, primary_key=True, autoincrement=True)
-	query_id = Column(String, ForeignKey("queries.query_id"), nullable=False)
+	id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+	query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=False)
 
 	correctness = Column(Integer, nullable=False)
 	relevance = Column(Integer, nullable=False)
@@ -52,10 +72,25 @@ class Rating(Base):
 	agent_system = Column(String, nullable=True)
 	agent_version = Column(String, nullable=True)
 
-	created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
-
 	__table_args__ = (
 		CheckConstraint("correctness BETWEEN 1 AND 5", name="correctness_range_check"),
 		CheckConstraint("relevance BETWEEN 1 AND 5", name="relevance_range_check"),
 		CheckConstraint("usefulness BETWEEN 1 AND 5", name="usefulness_range_check"),
 	)
+
+
+class Document(TimestampMixin, Base):
+	"""Stores documentation fetched from llms.txt sources."""
+
+	__tablename__ = "documents"
+
+	id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+	domain = Column(String, nullable=False, index=True)  # e.g. "react.dev"
+	url = Column(String, nullable=False, unique=True)  # Full URL
+	path = Column(String, nullable=False)  # e.g. "/docs/hooks/useState.md"
+	content = Column(Text, nullable=False)  # Markdown content
+	content_hash = Column(String, nullable=False)  # For change detection on upsert
+	content_refreshed_at = Column(
+		DateTime(timezone=True), nullable=False, server_default=func.now()
+	)  # When content was last refreshed
+	depth = Column(Integer, nullable=False, server_default="0")  # 0 = llms.txt, 1+ = linked

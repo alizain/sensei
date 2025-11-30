@@ -18,7 +18,7 @@ from sensei.server.models import (
 	RatingRequest,
 	RatingResponse,
 )
-from sensei.types import BrokenInvariant, Rating, ToolError, TransientError
+from sensei.types import BrokenInvariant, ToolError, TransientError
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +177,8 @@ async def rate(request: RatingRequest) -> RatingResponse:
 	"""
 	logger.info(f"POST /rate: query_id={request.query_id}")
 	try:
-		rating = Rating(**request.model_dump())
-		await core.handle_rating(rating)
+		# RatingRequest inherits from Rating, so we can pass it directly
+		await core.handle_rating(request)
 		logger.debug(f"Rating saved for query_id={request.query_id}")
 		return RatingResponse(status="recorded")
 	except Exception as e:

@@ -1,9 +1,12 @@
-"""Cache tools for Sensei."""
+"""Core cache functions for Kura.
 
-import json
+These are the underlying functions that power the MCP tools.
+They connect to the same PostgreSQL database as the main Sensei app.
+"""
+
 import logging
 from datetime import UTC, datetime
-from typing import Optional
+from uuid import UUID
 
 from sensei.database import storage
 from sensei.database.models import Query
@@ -12,35 +15,35 @@ from sensei.types import NoResults, Success
 logger = logging.getLogger(__name__)
 
 
-def _compute_age_days(created_at: datetime | str | None) -> int:
-	"""Compute age in days from created_at timestamp.
+def _compute_age_days(inserted_at: datetime | str | None) -> int:
+	"""Compute age in days from inserted_at timestamp.
 
-	Handles datetime coercion at the display edge.
+	Args:
+	    inserted_at: Timezone-aware datetime from DB, or ISO string from JSON.
+	                 DB uses DateTime(timezone=True), so datetimes are always aware.
+
+	Returns:
+	    Number of days since the timestamp (0 if None or today).
 	"""
-	if created_at is None:
+	if inserted_at is None:
 		return 0
-	if isinstance(created_at, str):
-		created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-	if created_at.tzinfo is None:
-		created_at = created_at.replace(tzinfo=UTC)
-	return (datetime.now(UTC) - created_at).days
+	if isinstance(inserted_at, str):
+		inserted_at = datetime.fromisoformat(inserted_at.replace("Z", "+00:00"))
+	return (datetime.now(UTC) - inserted_at).days
 
 
 def format_query_response(query: Query) -> str:
 	"""Format a Query model to markdown for display.
 
-	Computes derived values (age, parsed sources) at the display edge.
+	Computes derived values (age) at the display edge.
 	"""
-	age_days = _compute_age_days(query.created_at)
-	sources = json.loads(query.sources_used) if query.sources_used else []
-	sources_str = ", ".join(sources) if sources else "none recorded"
+	age_days = _compute_age_days(query.inserted_at)
 
 	return "\n".join(
 		[
-			f"# Cached Response: {query.query_id}",
+			f"# Cached Response: {query.id}",
 			"",
 			f"**Age:** {age_days} days",
-			f"**Sources:** {sources_str}",
 			"",
 			"## Original Query",
 			"",
@@ -55,8 +58,6 @@ def format_query_response(query: Query) -> str:
 
 async def search_cache(
 	search_term: str,
-	library: Optional[str] = None,
-	version: Optional[str] = None,
 	limit: int = 10,
 ) -> Success[str] | NoResults:
 	"""Search cached queries for relevant past answers.
@@ -65,16 +66,14 @@ async def search_cache(
 
 	Args:
 	    search_term: Keywords to search for in cached queries
-	    library: Optional library name to filter results
-	    version: Optional version to filter results
 	    limit: Maximum number of results (default 10)
 
 	Returns:
 	    Formatted list of cache hits with query_id, truncated query, and age
 	"""
-	logger.info(f"Searching cache: term={search_term}, library={library}")
+	logger.info(f"Searching cache: term={search_term}")
 
-	hits = await storage.search_queries_fts(search_term, library=library, version=version, limit=limit)
+	hits = await storage.search_queries(search_term, limit=limit)
 
 	if not hits:
 		return NoResults()
@@ -91,13 +90,13 @@ async def search_cache(
 	return Success("\n".join(lines))
 
 
-async def get_cached_response(query_id: str) -> Success[str] | NoResults:
+async def get_cached_response(query_id: UUID) -> Success[str] | NoResults:
 	"""Retrieve a full cached response by query ID.
 
 	Use this after finding relevant cache hits with search_cache.
 
 	Args:
-	    query_id: The ID of the cached query to retrieve
+	    query_id: The UUID of the cached query to retrieve
 
 	Returns:
 	    Full cached query and response with metadata

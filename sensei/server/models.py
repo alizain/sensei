@@ -1,6 +1,8 @@
 """Pydantic models for FastAPI request/response."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from sensei.types import QueryResult, Rating
 
 
 class QueryRequest(BaseModel):
@@ -29,69 +31,35 @@ class QueryRequest(BaseModel):
 	)
 
 
-class QueryResponse(BaseModel):
+class QueryResponse(QueryResult):
 	"""Response model for query results."""
 
-	query_id: str = Field(
-		...,
-		description="Unique identifier for this query",
-		json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
-	)
-	markdown: str = Field(
-		...,
-		description="Markdown documentation with code examples",
-		json_schema_extra={"example": "# FastAPI OAuth\n\nHere's how to implement OAuth..."},
+	model_config = ConfigDict(
+		json_schema_extra={
+			"example": {
+				"query_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+				"markdown": "# FastAPI OAuth\n\nHere's how to implement OAuth...",
+			}
+		}
 	)
 
 
-class RatingRequest(BaseModel):
+class RatingRequest(Rating):
 	"""Request model for rating a query response."""
 
-	query_id: str = Field(
-		...,
-		description="The query ID to rate",
-		json_schema_extra={"example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
-	)
-	correctness: int = Field(
-		...,
-		ge=1,
-		le=5,
-		description="Is the information/code correct? (1-5)",
-		json_schema_extra={"example": 5},
-	)
-	relevance: int = Field(
-		...,
-		ge=1,
-		le=5,
-		description="Did it answer the question? (1-5)",
-		json_schema_extra={"example": 5},
-	)
-	usefulness: int = Field(
-		...,
-		ge=1,
-		le=5,
-		description="Did it help solve the problem? (1-5)",
-		json_schema_extra={"example": 5},
-	)
-	reasoning: str | None = Field(
-		None,
-		description="Why these ratings? What changed from last time?",
-		json_schema_extra={"example": "Worked after applying, but token refresh was missing."},
-	)
-	agent_model: str | None = Field(
-		None,
-		description="Model identifier",
-		json_schema_extra={"example": "claude-3-5-sonnet-20241022"},
-	)
-	agent_system: str | None = Field(
-		None,
-		description="Agent system name",
-		json_schema_extra={"example": "Claude Code"},
-	)
-	agent_version: str | None = Field(
-		None,
-		description="Agent system version",
-		json_schema_extra={"example": "2.1.0"},
+	model_config = ConfigDict(
+		json_schema_extra={
+			"example": {
+				"query_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+				"correctness": 5,
+				"relevance": 5,
+				"usefulness": 5,
+				"reasoning": "Worked after applying, but token refresh was missing.",
+				"agent_model": "claude-3-5-sonnet-20241022",
+				"agent_system": "Claude Code",
+				"agent_version": "2.1.0",
+			}
+		}
 	)
 
 

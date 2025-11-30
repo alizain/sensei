@@ -40,13 +40,13 @@ class Settings(BaseSettings):
 
 	# Database
 	database_url: str = Field(
-		default="sqlite+aiosqlite:///./sensei.db",
+		default="",
 		description="Database connection URL",
 	)
 
 	# Server settings
 	sensei_host: str = Field(
-		default="http://localhost:8000",
+		default="",
 		description="Base URL where Sensei server is running",
 	)
 

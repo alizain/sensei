@@ -1,7 +1,6 @@
 """Core orchestration logic shared by API and MCP layers."""
 
 import logging
-import uuid
 from typing import AsyncIterator
 
 from pydantic_ai import AgentRunResultEvent, AgentStreamEvent
@@ -9,11 +8,79 @@ from pydantic_ai import AgentRunResultEvent, AgentStreamEvent
 from sensei import deps as deps_module
 from sensei.agent import agent
 from sensei.database import storage
-from sensei.database.storage import search_queries_fts
-from sensei.tools.exec_plan import clear_plan
 from sensei.types import QueryResult, Rating
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Shared Helpers
+# =============================================================================
+
+
+async def _prepare_query(
+	query: str,
+	language: str | None = None,
+	library: str | None = None,
+	version: str | None = None,
+) -> tuple[str, deps_module.Deps]:
+	"""Prepare enhanced query and deps for agent execution.
+
+	Args:
+	    query: The user's question
+	    language: Optional programming language
+	    library: Optional library/framework name
+	    version: Optional version specification
+
+	Returns:
+	    Tuple of (enhanced_query, deps with cache hits)
+	"""
+	enhanced_query = _build_enhanced_query(query, language, library, version)
+	if language or library or version:
+		logger.debug("Enhanced query with context")
+
+	cache_hits = await storage.search_queries(query, limit=5)
+	logger.debug(f"Prefetched {len(cache_hits)} cache hits")
+
+	deps = deps_module.Deps(cache_hits=cache_hits)
+	return enhanced_query, deps
+
+
+async def _save_query_result(
+	query: str,
+	output: str,
+	messages_json: bytes,
+	language: str | None = None,
+	library: str | None = None,
+	version: str | None = None,
+) -> str:
+	"""Save query result to storage.
+
+	Args:
+	    query: Original query text
+	    output: Agent output
+	    messages_json: Serialized message history
+	    language: Optional programming language
+	    library: Optional library/framework name
+	    version: Optional version specification
+
+	Returns:
+	    The generated query_id
+	"""
+	query_id = await storage.save_query(
+		query=query,
+		output=output,
+		messages=messages_json,
+		language=language,
+		library=library,
+		version=version,
+	)
+	logger.info(f"Query saved to database: id={query_id}")
+	return query_id
+
+
+# =============================================================================
+# Constants
+# =============================================================================
 
 FEEDBACK_TEMPLATE = """
 
@@ -79,46 +146,25 @@ async def stream_query(
 	    TransientError: If external services are temporarily unavailable
 	    ToolError: If the agent fails to process the query
 	"""
-	logger.info("=== CORE.STREAM_QUERY ENTERED ===")
-	query_id = str(uuid.uuid4())
-
-	logger.info(f"Streaming query: query_id={query_id}, language={language}, library={library}, version={version}")
+	logger.info(f"Streaming query: language={language}, library={library}, version={version}")
 	logger.debug(f"Query text: {query[:200]}{'...' if len(query) > 200 else ''}")
 
-	# Build enhanced query with context
-	enhanced_query = _build_enhanced_query(query, language, library, version)
-	if language or library or version:
-		logger.debug("Enhanced query with context")
+	enhanced_query, deps = await _prepare_query(query, language, library, version)
 
-	# Prefetch cache hits (no library/version filter - let agent decide relevance)
-	cache_hits = await search_queries_fts(query, limit=5)
-	logger.debug(f"Prefetched {len(cache_hits)} cache hits")
+	async for event in agent.run_stream_events(enhanced_query, deps=deps):
+		yield event
 
-	# Call agent's streaming API
-	deps = deps_module.Deps(query_id=query_id, cache_hits=cache_hits)
-	try:
-		logger.debug(f"Starting agent stream with query_id={query_id}")
-		async for event in agent.run_stream_events(enhanced_query, deps=deps):
-			yield event  # Pass through all events
-
-			# Save to DB when agent completes
-			if isinstance(event, AgentRunResultEvent):
-				output = event.result.output
-				logger.info(f"Agent completed successfully: {len(output)} chars")
-
-				await storage.save_query(
-					query_id=query_id,
-					query=query,
-					output=output,
-					messages=event.result.new_messages_json(),
-					sources_used=None,
-					language=language,
-					library=library,
-					version=version,
-				)
-				logger.info(f"Query saved to database: query_id={query_id}")
-	finally:
-		clear_plan(query_id)
+		if isinstance(event, AgentRunResultEvent):
+			output = event.result.output
+			logger.info(f"Agent completed successfully: {len(output)} chars")
+			await _save_query_result(
+				query,
+				output,
+				event.result.new_messages_json(),
+				language,
+				library,
+				version,
+			)
 
 
 async def handle_query(
@@ -140,42 +186,23 @@ async def handle_query(
 	    TransientError: If external services are temporarily unavailable
 	    ToolError: If the agent fails to process the query
 	"""
-	logger.info("=== CORE.HANDLE_QUERY ENTERED ===")
-	query_id = str(uuid.uuid4())
-
-	logger.info(f"Processing query: query_id={query_id}, language={language}, library={library}, version={version}")
+	logger.info(f"Processing query: language={language}, library={library}, version={version}")
 	logger.debug(f"Query text: {query[:200]}{'...' if len(query) > 200 else ''}")
 
-	# Build enhanced query with context
-	enhanced_query = _build_enhanced_query(query, language, library, version)
-	if language or library or version:
-		logger.debug("Enhanced query with context")
+	enhanced_query, deps = await _prepare_query(query, language, library, version)
 
-	# Prefetch cache hits (no library/version filter - let agent decide relevance)
-	cache_hits = await search_queries_fts(query, limit=5)
-	logger.debug(f"Prefetched {len(cache_hits)} cache hits")
+	result = await agent.run(enhanced_query, deps=deps)
+	output = result.output
+	logger.info(f"Agent completed successfully: {len(output)} chars")
 
-	# Call agent directly - orchestration happens here in core
-	deps = deps_module.Deps(query_id=query_id, cache_hits=cache_hits)
-	try:
-		logger.debug(f"Running agent with query_id={query_id}")
-		result = await agent.run(enhanced_query, deps=deps)
-		output = result.output
-		logger.info(f"Agent completed successfully: {len(output)} chars")
-
-		await storage.save_query(
-			query_id=query_id,
-			query=query,
-			output=output,
-			messages=result.new_messages_json(),
-			sources_used=None,
-			language=language,
-			library=library,
-			version=version,
-		)
-		logger.info(f"Query saved to database: query_id={query_id}")
-	finally:
-		clear_plan(query_id)
+	query_id = await _save_query_result(
+		query,
+		output,
+		result.new_messages_json(),
+		language,
+		library,
+		version,
+	)
 
 	output_with_feedback = output + FEEDBACK_TEMPLATE.format(query_id=query_id)
 	return QueryResult(query_id=query_id, markdown=output_with_feedback)
