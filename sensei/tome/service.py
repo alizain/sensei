@@ -1,7 +1,7 @@
 """Tome service layer for document retrieval and search.
 
 This is the middle layer between MCP tools and storage. It handles:
-- Sentinel value translation (INDEX, FULL)
+- Sentinel value translation (INDEX)
 - Result type wrapping (Success/NoResults)
 - Business logic validation
 - Section-based content reconstruction
@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 # Sentinel values for common document paths
 PATH_SENTINELS = {
 	"INDEX": "/llms.txt",
-	"FULL": "/llms-full.txt",
 }
 
 
@@ -31,10 +30,8 @@ async def tome_get(
 
 	Args:
 	    domain: The domain to fetch from (e.g., "react.dev")
-	    path: Document path, or sentinel values:
-	          - "INDEX" for /llms.txt (table of contents)
-	          - "FULL" for /llms-full.txt (complete docs)
-	          - Any other path like "/hooks/useState"
+	    path: Document path, or sentinel value "INDEX" for /llms.txt.
+	          Any other path like "/hooks/useState"
 	    heading: Optional heading to get subtree for specific section
 
 	Returns:
@@ -107,7 +104,7 @@ async def tome_toc(
 
 	Args:
 	    domain: The domain to fetch from (e.g., "react.dev")
-	    path: Document path, or sentinel values (INDEX, FULL)
+	    path: Document path, or sentinel value INDEX for /llms.txt
 
 	Returns:
 	    Success[list[TOCEntry]] with heading tree, or NoResults if not found

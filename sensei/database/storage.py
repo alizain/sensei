@@ -258,9 +258,7 @@ async def save_sections(
 	"""
 	async with AsyncSessionLocal() as session:
 		# Delete existing sections for this document (cascade will handle children)
-		await session.execute(
-			delete(Section).where(Section.document_id == document_id)
-		)
+		await session.execute(delete(Section).where(Section.document_id == document_id))
 
 		# Flatten the tree and insert sections
 		position_counter = [0]  # Use list to allow mutation in nested function
@@ -336,9 +334,7 @@ async def delete_sections_by_document(document_id: UUID) -> int:
 	    Number of sections deleted
 	"""
 	async with AsyncSessionLocal() as session:
-		result = await session.execute(
-			delete(Section).where(Section.document_id == document_id)
-		)
+		result = await session.execute(delete(Section).where(Section.document_id == document_id))
 		await session.commit()
 		return result.rowcount
 
@@ -371,11 +367,7 @@ async def get_sections_by_document(
 			return []
 
 		# Get all sections ordered by position
-		result = await session.execute(
-			select(Section)
-			.where(Section.document_id == doc.id)
-			.order_by(Section.position)
-		)
+		result = await session.execute(select(Section).where(Section.document_id == doc.id).order_by(Section.position))
 		return list(result.scalars().all())
 
 
@@ -452,8 +444,6 @@ async def get_document_by_url(url: str) -> Optional[Document]:
 	async with AsyncSessionLocal() as session:
 		result = await session.execute(select(Document).where(Document.url == url))
 		return result.scalar_one_or_none()
-
-
 
 
 async def delete_documents_by_domain(domain: str) -> int:

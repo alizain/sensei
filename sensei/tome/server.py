@@ -38,9 +38,7 @@ async def get(
 	domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'react.dev')")],
 	path: Annotated[
 		str,
-		Field(
-			description="Document path, or 'INDEX' for /llms.txt, 'FULL' for /llms-full.txt"
-		),
+		Field(description="Document path, or 'INDEX' for /llms.txt"),
 	],
 ) -> str:
 	"""Get documentation from an ingested llms.txt domain.
@@ -50,7 +48,6 @@ async def get(
 
 	Examples:
 	    - domain="react.dev", path="INDEX" - get the llms.txt table of contents
-	    - domain="react.dev", path="FULL" - get the complete llms-full.txt
 	    - domain="react.dev", path="/hooks/useState" - get a specific document
 	"""
 	match await _tome_get(domain, path):
@@ -99,8 +96,8 @@ async def ingest(
 ) -> str:
 	"""Ingest a domain's llms.txt documentation into the knowledge base.
 
-	Fetches /llms.txt and /llms-full.txt (if available), parses links,
-	and crawls all same-domain linked documents up to max_depth.
+	Fetches /llms.txt, parses links, and crawls all same-domain linked
+	documents up to max_depth.
 
 	Use this before searching a domain for the first time.
 
@@ -114,8 +111,7 @@ async def ingest(
 				f"Ingested {result.domain}: "
 				f"{result.documents_added} added, "
 				f"{result.documents_updated} updated, "
-				f"{result.documents_skipped} unchanged"
-				+ (f", {len(result.errors)} errors" if result.errors else "")
+				f"{result.documents_skipped} unchanged" + (f", {len(result.errors)} errors" if result.errors else "")
 			)
 
 

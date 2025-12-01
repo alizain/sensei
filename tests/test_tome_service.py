@@ -28,14 +28,6 @@ async def sample_docs(test_db):
 		),
 		DocumentContent(
 			domain="react.dev",
-			url="https://react.dev/llms-full.txt",
-			path="/llms-full.txt",
-			content="# Complete React Documentation\n\nThis is the full llms-full.txt content.",
-			content_hash=_hash("full"),
-			depth=0,
-		),
-		DocumentContent(
-			domain="react.dev",
 			url="https://react.dev/hooks/useState",
 			path="/hooks/useState",
 			content="# useState\n\nuseState is a React Hook that lets you add state to functional components.",
@@ -75,14 +67,6 @@ async def test_tome_get_index_sentinel(sample_docs):
 	result = await tome_get("react.dev", "INDEX")
 	assert isinstance(result, Success)
 	assert "React Documentation Index" in result.data
-
-
-@pytest.mark.asyncio
-async def test_tome_get_full_sentinel(sample_docs):
-	"""Test FULL sentinel returns /llms-full.txt content."""
-	result = await tome_get("react.dev", "FULL")
-	assert isinstance(result, Success)
-	assert "Complete React Documentation" in result.data
 
 
 @pytest.mark.asyncio
@@ -243,6 +227,6 @@ async def test_ingest_crawlee_dev_python(test_db):
 	assert total_docs >= 1, f"Expected at least 1 document, got {total_docs}"
 
 	# Test tome_get with INDEX sentinel
-	get_result = await tome_get("crawlee.dev", "INDEX")
 	# May be NoResults if domain normalization differs - that's OK for this test
 	# The key test is that the crawl worked
+	await tome_get("crawlee.dev", "INDEX")

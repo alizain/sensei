@@ -201,9 +201,7 @@ class SearchResult(BaseModel):
 	path: str = Field(..., description="Path portion of the URL")
 	snippet: str = Field(..., description="Text snippet with search terms highlighted")
 	rank: float = Field(..., description="Relevance score from ts_rank")
-	heading_path: str = Field(
-		default="", description="Breadcrumb path like 'API > Hooks > useState'"
-	)
+	heading_path: str = Field(default="", description="Breadcrumb path like 'API > Hooks > useState'")
 
 
 @dataclass

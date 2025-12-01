@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Crawler configuration
 REQUEST_TIMEOUT = timedelta(seconds=30)
-MAX_REQUESTS_PER_CRAWL = 500
+MAX_REQUESTS_PER_CRAWL = 1000000
 CONCURRENCY = ConcurrencySettings(min_concurrency=1, max_concurrency=10)
 
 # Content types we accept (llms.txt standard uses markdown)
@@ -40,18 +40,17 @@ def is_markdown_content(content_type: str | None) -> bool:
 	    True if content type is acceptable for markdown content
 	"""
 	if not content_type:
-		return True  # Accept if no content type (trust the URL)
+		return False
 	# Extract media type (ignore charset and other parameters)
 	media_type = content_type.split(";")[0].strip().lower()
 	return media_type in ALLOWED_CONTENT_TYPES
 
 
 async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult]:
-	"""Ingest documentation from a domain's llms.txt and llms-full.txt files.
+	"""Ingest documentation from a domain's llms.txt file.
 
-	Fetches both /llms.txt (INDEX) and /llms-full.txt (FULL) from the domain,
-	parses llms.txt to extract links, then crawls all same-domain linked
-	documents up to max_depth. Missing llms-full.txt (404) is handled gracefully.
+	Fetches /llms.txt from the domain, parses it to extract links, then crawls
+	all same-domain linked documents up to max_depth.
 
 	Documents are chunked by markdown headings and stored as sections for
 	efficient full-text search and granular retrieval.
@@ -60,8 +59,8 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
 	    domain: The domain to crawl (e.g., "react.dev"). Can be a full URL -
 	            will be normalized automatically.
 	    max_depth: Maximum link depth to follow. 0 means only fetch llms.txt
-	            and llms-full.txt (no linked documents). 1 means fetch those
-	            plus direct links. Default is 3.
+	            (no linked documents). 1 means fetch llms.txt plus direct links.
+	            Default is 3.
 
 	Returns:
 	    Success[IngestResult] with counts of documents processed
@@ -73,11 +72,9 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
 	normalized_domain = Domain(domain).value
 	result = IngestResult(domain=normalized_domain)
 
-	# Start with both llms.txt (INDEX) and llms-full.txt (FULL)
-	# llms-full.txt may not exist (404 is handled gracefully by Crawlee)
+	# Start with llms.txt - the standard entry point for documentation
 	initial_urls = [
 		f"https://{normalized_domain}/llms.txt",
-		f"https://{normalized_domain}/llms-full.txt",
 	]
 
 	# Use MemoryStorageClient to avoid filesystem race conditions between crawls
@@ -150,7 +147,7 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
 				]
 				await context.add_requests(requests)
 
-	# Start crawl with both llms.txt and llms-full.txt (both depth=0)
+	# Start crawl with llms.txt (depth=0)
 	try:
 		initial_requests = [Request.from_url(url, user_data={"depth": 0}) for url in initial_urls]
 		await crawler.run(initial_requests)
