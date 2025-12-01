@@ -161,7 +161,7 @@ async def test_activate_generation(test_db):
     generation_id = uuid4()
 
     # Insert document (inactive)
-    doc_id = await storage.insert_document(
+    await storage.insert_document(
         domain="example.com",
         url="https://example.com/doc",
         path="/doc",
