@@ -5,7 +5,7 @@ from pydantic_ai.mcp import MCPServerStreamableHTTP
 from sensei.config import settings
 
 
-def create_scout_server(base_url: str | None = None) -> MCPServerStreamableHTTP:
+def create_scout_server(base_url: str = "http://localhost:8000") -> MCPServerStreamableHTTP:
 	"""Create Scout MCP server connection.
 
 	Args:

@@ -1,26 +1,14 @@
 {
-	"agents": [
-		"./agents/sensei.md"
-	],
+	"agents": ["./agents/sensei.md"],
 	"author": {
 		"name": "Alizain Feerasta"
 	},
 	"description": "Documentation research agent with Scout for repository exploration",
-	"keywords": [
-		"scout",
-		"repo-map",
-		"code-exploration",
-		"documentation",
-		"research"
-	],
+	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
 	"license": "MIT",
 	"mcpServers": {
 		"scout": {
-			"args": [
-				"--from",
-				"sensei-ai",
-				"scout"
-			],
+			"args": ["--from", "sensei-ai", "scout"],
 			"command": "uvx",
 			"type": "stdio"
 		}

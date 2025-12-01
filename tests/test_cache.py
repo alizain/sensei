@@ -217,12 +217,12 @@ def test_main_agent_has_exec_plan_tools():
 
 
 def test_cache_prompt_includes_cache_instructions():
-	"""Test CACHE_TOOLS includes cache usage instructions."""
-	from sensei.prompts import CACHE_TOOLS
+	"""Test QUERY_DECOMPOSITION includes cache and subagent usage instructions."""
+	from sensei.prompts import QUERY_DECOMPOSITION
 
-	assert "search_cache" in CACHE_TOOLS
-	assert "spawn_sub_agent" in CACHE_TOOLS
-	assert "decompos" in CACHE_TOOLS.lower()  # decompose/decomposition
+	assert "cache" in QUERY_DECOMPOSITION.lower()
+	assert "subagent" in QUERY_DECOMPOSITION.lower()
+	assert "decompos" in QUERY_DECOMPOSITION.lower()  # decompose/decomposition
 
 
 @pytest.mark.asyncio

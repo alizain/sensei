@@ -74,7 +74,7 @@ async def test_db():
 
 	# Clean up data (truncate tables, keep schema)
 	async with test_engine.begin() as conn:
-		await conn.execute(text("TRUNCATE TABLE ratings, documents, queries CASCADE"))
+		await conn.execute(text("TRUNCATE TABLE sections, ratings, documents, queries CASCADE"))
 
 	# Restore original engine
 	await test_engine.dispose()

@@ -160,3 +160,73 @@ class SubSenseiResult(BaseModel):
 	response_markdown: str
 	from_cache: bool
 	age_days: int | None = None
+
+
+class DocumentContent(BaseModel):
+	"""Content to save for a crawled document.
+
+	Used by the tome crawler to pass document data to storage layer.
+	Keeps the domain model as single source of truth.
+	"""
+
+	domain: str = Field(..., description="Source domain (e.g., 'react.dev')")
+	url: str = Field(..., description="Full URL of the document")
+	path: str = Field(..., description="Path portion of the URL")
+	content: str = Field(..., description="Markdown content")
+	content_hash: str = Field(..., description="Hash for change detection")
+	depth: int = Field(..., ge=0, description="Crawl depth (0 = llms.txt, 1+ = linked)")
+
+
+class IngestResult(BaseModel):
+	"""Result of ingesting a domain's llms.txt documentation.
+
+	Returned by the tome crawler after crawling a domain's llms.txt
+	and its linked documents.
+	"""
+
+	domain: str = Field(..., description="The domain that was crawled")
+	documents_added: int = Field(default=0, ge=0, description="Number of new documents added")
+	documents_updated: int = Field(default=0, ge=0, description="Number of existing documents updated")
+	documents_skipped: int = Field(default=0, ge=0, description="Number of unchanged documents skipped")
+	errors: list[str] = Field(default_factory=list, description="Errors encountered during crawl")
+
+
+class SearchResult(BaseModel):
+	"""A full-text search result from section-based search.
+
+	Returned by search_sections_fts() for tome_search functionality.
+	"""
+
+	url: str = Field(..., description="Full URL of the matching document")
+	path: str = Field(..., description="Path portion of the URL")
+	snippet: str = Field(..., description="Text snippet with search terms highlighted")
+	rank: float = Field(..., description="Relevance score from ts_rank")
+	heading_path: str = Field(
+		default="", description="Breadcrumb path like 'API > Hooks > useState'"
+	)
+
+
+@dataclass
+class SectionData:
+	"""Intermediate type for chunking algorithm output.
+
+	Represents a section extracted from markdown content. Used by the chunker
+	to return hierarchical sections that will be flattened for storage.
+	"""
+
+	heading: str | None  # Null for intro/root content before first heading
+	level: int  # 0=root, 1=h1, 2=h2, etc.
+	content: str  # This section's markdown content
+	children: list["SectionData"]  # Child sections for building hierarchy
+
+
+@dataclass
+class TOCEntry:
+	"""Table of contents entry for tome_toc().
+
+	Represents a heading in the document hierarchy for navigation.
+	"""
+
+	heading: str
+	level: int
+	children: list["TOCEntry"]

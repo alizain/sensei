@@ -73,7 +73,9 @@ async def search_cache(
 	"""
 	logger.info(f"Searching cache: term={search_term}")
 
-	hits = await storage.search_queries(search_term, limit=limit)
+	# Split into words - storage.search_queries AND-s all terms
+	terms = search_term.split()
+	hits = await storage.search_queries(terms, limit=limit)
 
 	if not hits:
 		return NoResults()

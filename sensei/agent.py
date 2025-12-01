@@ -21,6 +21,7 @@ from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
 from sensei.tools.kura import create_kura_server
 from sensei.tools.scout import create_scout_server
 from sensei.tools.tavily import create_tavily_server
+from sensei.tools.tome import create_tome_server
 from sensei.types import ToolError
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,7 @@ def create_agent(
 			create_tavily_server(settings.tavily_api_key),
 			create_scout_server(),
 			create_kura_server(),
+			create_tome_server(),
 		],
 		tools=tools,
 		instructions=[current_exec_plan, prefetch_cache_hits],

@@ -98,10 +98,13 @@ async def glob(
 	pattern: Annotated[str, Field(description="Glob pattern (e.g., '**/*.py', 'src/**/*.ts')")],
 	ref: Annotated[str | None, REPO_REF_FIELD] = None,
 ) -> str:
-	"""Find files matching a glob pattern.
+	"""Find files matching a glob pattern in an external GitHub repository.
 
-	Returns a list of relative file paths, sorted alphabetically.
-	Limited to 500 results.
+	Use this to explore repos you don't have locally. Scout clones the repo to a
+	temp directory. Specify a ref (branch/tag/commit) to get a specific version,
+	or omit it to use the repo's default branch (usually main/master).
+
+	Returns relative file paths, sorted alphabetically. Limited to 500 results.
 
 	Examples:
 	    - "**/*.py" - all Python files
@@ -133,12 +136,15 @@ async def read(
 	paths: Annotated[list[str], Field(description="File path(s) relative to repo root")],
 	ref: Annotated[str | None, REPO_REF_FIELD] = None,
 ) -> str:
-	"""Read one or more files from the repository.
+	"""Read one or more files from an external GitHub repository.
 
-	Returns file contents with path headers. For multiple files, each is
-	separated by a header showing the file path.
+	Use this to examine source code, configs, or docs in repos you don't have
+	locally. Scout clones the repo to a temp directory. Specify a ref
+	(branch/tag/commit) to get a specific version, or omit it to use the repo's
+	default branch (usually main/master).
 
-	Large files (>100KB) are truncated. Binary files return an error message.
+	Returns file contents with path headers. Large files (>100KB) are truncated.
+	Binary files return an error message.
 	"""
 	async with with_repo(url, ref) as repo_path:
 		match await read_files(repo_path, paths):
@@ -164,10 +170,15 @@ async def grep(
 	glob: Annotated[str | None, Field(description="Limit search to files matching this glob")] = None,
 	context_lines: Annotated[int, Field(description="Lines of context around matches", ge=0, le=10)] = 3,
 ) -> str:
-	"""Search for a pattern in repository files.
+	"""Search for a pattern in an external GitHub repository's files.
 
-	Returns matching lines with file paths, line numbers, and surrounding context.
-	Uses ripgrep for fast searching. Respects .gitignore.
+	Use this to find specific code patterns, function definitions, or usages in
+	repos you don't have locally. Scout clones the repo to a temp directory.
+	Specify a ref (branch/tag/commit) to search a specific version, or omit it
+	to use the repo's default branch (usually main/master).
+
+	Returns matching lines with file paths, line numbers, and context.
+	Uses ripgrep (fast, respects .gitignore).
 
 	Examples:
 	    - pattern="def.*async" - find async function definitions
@@ -189,11 +200,15 @@ async def tree(
 	path: Annotated[str, REPO_PATH_FIELD] = "",
 	max_depth: Annotated[int, Field(description="Maximum depth to traverse", ge=1, le=10)] = 3,
 ) -> str:
-	"""Show directory structure of the repository.
+	"""Show directory structure of an external GitHub repository.
 
-	Returns a tree view of files and directories, useful for understanding
-	project layout before exploring specific files. Uses lstr for fast traversal
-	and respects .gitignore.
+	Use this to understand project layout in repos you don't have locally.
+	Scout clones the repo to a temp directory. Specify a ref (branch/tag/commit)
+	to see a specific version, or omit it to use the repo's default branch
+	(usually main/master).
+
+	Returns a tree view of files and directories. Uses lstr (fast, respects
+	.gitignore).
 
 	Example output:
 	    src/

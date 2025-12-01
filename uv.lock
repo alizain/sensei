@@ -1439,6 +1439,15 @@ wheels = [
 ]
 
 [[package]]
+name = "marko"
+version = "2.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/60/f5ce3c467b29fbf8f654c56e23ddde6febf52b8fab4b8e949f46aa8e1c12/marko-2.2.1.tar.gz", hash = "sha256:e29d7e071a3b0cb2f7cc4c500d55f893dc5a45d85a8298dde6cb4e4dffd794d3", size = 143474, upload-time = "2025-10-13T03:13:42.101Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/de/65dfc670e50c9db92b750db1d7c87292b8f3ba9be2c1154594d1a7d1afb4/marko-2.2.1-py3-none-any.whl", hash = "sha256:31e9a18b35c113e506ace5594716fa3df2872f8955908e279bc551f3eb1f0db8", size = 42688, upload-time = "2025-10-13T03:13:40.452Z" },
+]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1516,6 +1525,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5a/8d/d8b7af67a966b6f227024e1cb7287fc19901a434f87a5a391dcfe635d338/mistralai-1.9.11.tar.gz", hash = "sha256:3df9e403c31a756ec79e78df25ee73cea3eb15f86693773e16b16adaf59c9b8a", size = 208051, upload-time = "2025-10-02T15:53:40.473Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/76/4ce12563aea5a76016f8643eff30ab731e6656c845e9e4d090ef10c7b925/mistralai-1.9.11-py3-none-any.whl", hash = "sha256:7a3dc2b8ef3fceaa3582220234261b5c4e3e03a972563b07afa150e44a25a6d3", size = 442796, upload-time = "2025-10-02T15:53:39.134Z" },
+]
+
+[[package]]
+name = "mistune"
+version = "3.1.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d7/02/a7fb8b21d4d55ac93cdcde9d3638da5dd0ebdd3a4fed76c7725e10b81cbe/mistune-3.1.4.tar.gz", hash = "sha256:b5a7f801d389f724ec702840c11d8fc48f2b33519102fc7ee739e8177b672164", size = 94588, upload-time = "2025-08-29T07:20:43.594Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/f0/8282d9641415e9e33df173516226b404d367a0fc55e1a60424a152913abc/mistune-3.1.4-py3-none-any.whl", hash = "sha256:93691da911e5d9d2e23bc54472892aff676df27a75274962ff9edc210364266d", size = 53481, upload-time = "2025-08-29T07:20:42.218Z" },
 ]
 
 [[package]]
@@ -2547,7 +2568,9 @@ dependencies = [
     { name = "fastmcp" },
     { name = "greenlet" },
     { name = "httpx" },
+    { name = "marko" },
     { name = "mcp" },
+    { name = "mistune" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
     { name = "pydantic-settings" },
@@ -2580,7 +2603,9 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.13.1" },
     { name = "greenlet", specifier = ">=3.2.4" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "marko", specifier = ">=2.0.0" },
     { name = "mcp", specifier = ">=1.22.0" },
+    { name = "mistune", specifier = ">=3.1.4" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-ai", specifier = ">=1.22.0" },
     { name = "pydantic-settings", specifier = ">=2.11.7" },

@@ -6,7 +6,7 @@ from uuid import UUID
 import pytest
 
 from sensei.database import storage
-from sensei.types import Rating, SaveResult
+from sensei.types import Rating, SaveResult, SectionData
 
 
 @pytest.mark.asyncio
@@ -112,16 +112,16 @@ async def test_search_queries(test_db):
 	await storage.save_query(query="Python async await", output="Answer 3", library="python")
 
 	# Search for "React"
-	results = await storage.search_queries("React", limit=10)
+	results = await storage.search_queries(["React"], limit=10)
 	assert len(results) == 2
 
 	# Search that matches nothing
-	results = await storage.search_queries("nonexistent", limit=10)
+	results = await storage.search_queries(["nonexistent"], limit=10)
 	assert len(results) == 0
 
 
 # =============================================================================
-# Document Storage Tests
+# Document and Section Storage Tests
 # =============================================================================
 
 
@@ -131,90 +131,80 @@ def _hash(content: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_save_document_insert(test_db):
-	"""Test inserting a new document."""
-	content = "# React Hooks\n\nuseState is..."
-	result = await storage.save_document(
+async def test_save_document_metadata_insert(test_db):
+	"""Test inserting a new document metadata."""
+	result, doc_id = await storage.save_document_metadata(
 		domain="react.dev",
 		url="https://react.dev/docs/hooks/useState",
 		path="/docs/hooks/useState",
-		content=content,
-		content_hash=_hash(content),
+		content_hash=_hash("content"),
 		depth=1,
 	)
 
 	assert result == SaveResult.INSERTED
+	assert doc_id is not None
 
 	# Verify retrieval
 	doc = await storage.get_document_by_url("https://react.dev/docs/hooks/useState")
 	assert doc is not None
 	assert doc.domain == "react.dev"
 	assert doc.path == "/docs/hooks/useState"
-	assert doc.content == content
 	assert doc.depth == 1
 
 
 @pytest.mark.asyncio
-async def test_save_document_skip_unchanged(test_db):
+async def test_save_document_metadata_skip_unchanged(test_db):
 	"""Test that unchanged documents are skipped."""
-	content = "# Original content"
-	content_hash = _hash(content)
+	content_hash = _hash("Original content")
 
 	# First insert
-	result1 = await storage.save_document(
+	result1, doc_id1 = await storage.save_document_metadata(
 		domain="example.com",
 		url="https://example.com/doc",
 		path="/doc",
-		content=content,
 		content_hash=content_hash,
 		depth=0,
 	)
 	assert result1 == SaveResult.INSERTED
 
-	# Same content, same hash - should skip
-	result2 = await storage.save_document(
+	# Same hash - should skip
+	result2, doc_id2 = await storage.save_document_metadata(
 		domain="example.com",
 		url="https://example.com/doc",
 		path="/doc",
-		content=content,
 		content_hash=content_hash,
 		depth=0,
 	)
 	assert result2 == SaveResult.SKIPPED
+	assert doc_id2 == doc_id1  # Returns existing ID
 
 
 @pytest.mark.asyncio
-async def test_save_document_update_changed(test_db):
+async def test_save_document_metadata_update_changed(test_db):
 	"""Test that changed documents are updated."""
-	original_content = "# Version 1"
-	updated_content = "# Version 2 with changes"
+	original_hash = _hash("Version 1")
+	updated_hash = _hash("Version 2 with changes")
 
 	# Insert original
-	result1 = await storage.save_document(
+	result1, doc_id1 = await storage.save_document_metadata(
 		domain="example.com",
 		url="https://example.com/doc",
 		path="/doc",
-		content=original_content,
-		content_hash=_hash(original_content),
+		content_hash=original_hash,
 		depth=0,
 	)
 	assert result1 == SaveResult.INSERTED
 
-	# Update with new content
-	result2 = await storage.save_document(
+	# Update with new hash
+	result2, doc_id2 = await storage.save_document_metadata(
 		domain="example.com",
 		url="https://example.com/doc",
 		path="/doc",
-		content=updated_content,
-		content_hash=_hash(updated_content),
+		content_hash=updated_hash,
 		depth=0,
 	)
 	assert result2 == SaveResult.UPDATED
-
-	# Verify new content
-	doc = await storage.get_document_by_url("https://example.com/doc")
-	assert doc is not None
-	assert doc.content == updated_content
+	assert doc_id2 == doc_id1  # Same document
 
 
 @pytest.mark.asyncio
@@ -225,76 +215,123 @@ async def test_get_document_by_url_not_found(test_db):
 
 
 @pytest.mark.asyncio
-async def test_search_documents(test_db):
-	"""Test searching documents by content."""
-	# Insert test documents
-	await storage.save_document(
+async def test_save_and_get_sections(test_db):
+	"""Test saving sections for a document and retrieving them."""
+	# Create document
+	result, doc_id = await storage.save_document_metadata(
 		domain="react.dev",
 		url="https://react.dev/hooks",
 		path="/hooks",
-		content="# React Hooks\n\nuseState lets you manage state",
 		content_hash=_hash("hooks"),
 		depth=0,
 	)
-	await storage.save_document(
+	assert result == SaveResult.INSERTED
+
+	# Create sections with hierarchy
+	sections = SectionData(
+		heading=None,
+		level=0,
+		content="# React Hooks Overview",
+		children=[
+			SectionData(
+				heading="useState",
+				level=2,
+				content="## useState\n\nuseState lets you manage state",
+				children=[],
+			),
+			SectionData(
+				heading="useEffect",
+				level=2,
+				content="## useEffect\n\nuseEffect lets you synchronize",
+				children=[],
+			),
+		],
+	)
+
+	# Save sections
+	count = await storage.save_sections(doc_id, sections)
+	assert count == 3  # Root + 2 children
+
+	# Retrieve sections
+	retrieved = await storage.get_sections_by_document("react.dev", "/hooks")
+	assert len(retrieved) == 3
+
+	# Verify order (by position)
+	assert retrieved[0].level == 0
+	assert retrieved[1].heading == "useState"
+	assert retrieved[2].heading == "useEffect"
+
+
+@pytest.mark.asyncio
+async def test_search_sections_fts(test_db):
+	"""Test full-text search on sections with heading_path."""
+	# Create document with sections
+	result, doc_id = await storage.save_document_metadata(
 		domain="react.dev",
-		url="https://react.dev/components",
-		path="/components",
-		content="# React Components\n\nComponents are building blocks",
-		content_hash=_hash("components"),
-		depth=0,
-	)
-	await storage.save_document(
-		domain="vue.js.org",
-		url="https://vue.js.org/guide",
-		path="/guide",
-		content="# Vue Guide\n\nVue is a framework",
-		content_hash=_hash("vue"),
+		url="https://react.dev/hooks",
+		path="/hooks",
+		content_hash=_hash("hooks"),
 		depth=0,
 	)
 
-	# Search all documents for "React"
-	results = await storage.search_documents("React")
-	assert len(results) == 2
+	sections = SectionData(
+		heading=None,
+		level=0,
+		content="",
+		children=[
+			SectionData(
+				heading="useState Hook",
+				level=2,
+				content="## useState Hook\n\nuseState is a React Hook that lets you add state variable to component.",
+				children=[],
+			),
+			SectionData(
+				heading="useEffect Hook",
+				level=2,
+				content="## useEffect Hook\n\nuseEffect is a React Hook that lets you synchronize with external systems.",
+				children=[],
+			),
+		],
+	)
+	await storage.save_sections(doc_id, sections)
 
-	# Search with domain filter
-	results = await storage.search_documents("React", domain="react.dev")
-	assert len(results) == 2
+	# Search for "Hook"
+	results = await storage.search_sections_fts("react.dev", "Hook")
+	assert len(results) >= 1
+	# Results should have heading_path
+	assert all(hasattr(r, "heading_path") for r in results)
 
-	# Search for "Vue" with react domain - should find nothing
-	results = await storage.search_documents("Vue", domain="react.dev")
+	# Search with no matches
+	results = await storage.search_sections_fts("react.dev", "nonexistent")
 	assert len(results) == 0
 
-	# Search with limit
-	results = await storage.search_documents("React", limit=1)
-	assert len(results) == 1
+	# Empty query returns empty
+	results = await storage.search_sections_fts("react.dev", "")
+	assert len(results) == 0
 
 
 @pytest.mark.asyncio
 async def test_delete_documents_by_domain(test_db):
 	"""Test deleting all documents for a domain."""
 	# Insert documents for multiple domains
-	await storage.save_document(
+	await storage.save_document_metadata(
 		domain="react.dev",
 		url="https://react.dev/doc1",
 		path="/doc1",
-		content="React doc 1",
 		content_hash=_hash("r1"),
 		depth=0,
 	)
-	await storage.save_document(
+	await storage.save_document_metadata(
 		domain="react.dev",
 		url="https://react.dev/doc2",
 		path="/doc2",
-		content="React doc 2",
 		content_hash=_hash("r2"),
 		depth=0,
 	)
-	await storage.save_document(
+	await storage.save_document_metadata(
 		domain="vue.js.org",
 		url="https://vue.js.org/doc1",
 		path="/doc1",
-		content="Vue doc",
 		content_hash=_hash("v1"),
 		depth=0,
 	)
@@ -340,7 +377,7 @@ async def test_migration_schema_matches_models(test_db):
 		tables = await conn.run_sync(get_tables)
 
 	# Check all expected tables exist
-	expected_tables = {"queries", "ratings", "documents", "alembic_version"}
+	expected_tables = {"queries", "ratings", "documents", "sections", "alembic_version"}
 	assert set(tables) == expected_tables
 
 
@@ -404,7 +441,7 @@ async def test_migration_ratings_columns(test_db):
 
 @pytest.mark.asyncio
 async def test_migration_documents_columns(test_db):
-	"""Verify documents table has all expected columns."""
+	"""Verify documents table has expected columns (no content, no search_vector)."""
 	from sqlalchemy import inspect
 
 	async with test_db.connect() as conn:
@@ -415,12 +452,12 @@ async def test_migration_documents_columns(test_db):
 
 		columns = await conn.run_sync(get_columns)
 
+	# Document is now a container - content moved to sections
 	expected_columns = {
 		"id",
 		"domain",
 		"url",
 		"path",
-		"content",
 		"content_hash",
 		"content_refreshed_at",
 		"depth",
@@ -428,6 +465,50 @@ async def test_migration_documents_columns(test_db):
 		"updated_at",
 	}
 	assert columns == expected_columns
+
+
+@pytest.mark.asyncio
+async def test_migration_sections_columns(test_db):
+	"""Verify sections table has all expected columns."""
+	from sqlalchemy import inspect
+
+	async with test_db.connect() as conn:
+
+		def get_columns(connection):
+			inspector = inspect(connection)
+			return {col["name"] for col in inspector.get_columns("sections")}
+
+		columns = await conn.run_sync(get_columns)
+
+	expected_columns = {
+		"id",
+		"document_id",
+		"parent_section_id",
+		"heading",
+		"level",
+		"content",
+		"position",
+		"search_vector",
+		"inserted_at",
+		"updated_at",
+	}
+	assert columns == expected_columns
+
+
+@pytest.mark.asyncio
+async def test_migration_sections_fts_index(test_db):
+	"""Verify sections table has FTS index."""
+	from sqlalchemy import inspect
+
+	async with test_db.connect() as conn:
+
+		def get_indexes(connection):
+			inspector = inspect(connection)
+			return {idx["name"] for idx in inspector.get_indexes("sections")}
+
+		indexes = await conn.run_sync(get_indexes)
+
+	assert "idx_sections_search_vector" in indexes
 
 
 @pytest.mark.asyncio
@@ -519,37 +600,18 @@ async def test_save_query_unicode_content(test_db):
 
 
 @pytest.mark.asyncio
-async def test_save_document_unicode_content(test_db):
-	"""Test saving documents with unicode content."""
-	content = "# 日本語ドキュメント\n\nこれはテストです。Émojis: 🔥💡"
-	result = await storage.save_document(
-		domain="example.com",
-		url="https://example.com/japanese",
-		path="/japanese",
-		content=content,
-		content_hash=_hash(content),
-		depth=0,
-	)
-
-	assert result == SaveResult.INSERTED
-	doc = await storage.get_document_by_url("https://example.com/japanese")
-	assert doc is not None
-	assert doc.content == content
-
-
-@pytest.mark.asyncio
 async def test_search_queries_case_insensitive(test_db):
 	"""Test that search is case insensitive."""
 	await storage.save_query(query="How do REACT hooks work?", output="Answer")
 
 	# Should find regardless of case
-	results = await storage.search_queries("react")
+	results = await storage.search_queries(["react"])
 	assert len(results) == 1
 
-	results = await storage.search_queries("REACT")
+	results = await storage.search_queries(["REACT"])
 	assert len(results) == 1
 
-	results = await storage.search_queries("ReAcT")
+	results = await storage.search_queries(["ReAcT"])
 	assert len(results) == 1
 
 
@@ -559,10 +621,10 @@ async def test_search_queries_partial_match(test_db):
 	await storage.save_query(query="Understanding useState in React", output="Answer")
 
 	# Should match partial term
-	results = await storage.search_queries("State")
+	results = await storage.search_queries(["State"])
 	assert len(results) == 1
 
-	results = await storage.search_queries("stand")
+	results = await storage.search_queries(["stand"])
 	assert len(results) == 1
 
 
@@ -574,10 +636,10 @@ async def test_search_queries_respects_limit(test_db):
 		await storage.save_query(query=f"React question {i}", output=f"Answer {i}")
 
 	# Verify limit works
-	results = await storage.search_queries("React", limit=3)
+	results = await storage.search_queries(["React"], limit=3)
 	assert len(results) == 3
 
-	results = await storage.search_queries("React", limit=5)
+	results = await storage.search_queries(["React"], limit=5)
 	assert len(results) == 5
 
 
@@ -585,35 +647,29 @@ async def test_search_queries_respects_limit(test_db):
 async def test_document_url_uniqueness(test_db):
 	"""Test that document URLs are unique - updating replaces existing."""
 	url = "https://unique.com/doc"
-	content1 = "Version 1"
-	content2 = "Version 2"
+	content1_hash = _hash("Version 1")
+	content2_hash = _hash("Version 2")
 
 	# Insert first version
-	result1 = await storage.save_document(
+	result1, doc_id1 = await storage.save_document_metadata(
 		domain="unique.com",
 		url=url,
 		path="/doc",
-		content=content1,
-		content_hash=_hash(content1),
+		content_hash=content1_hash,
 		depth=0,
 	)
 	assert result1 == SaveResult.INSERTED
 
-	# Update with second version (same URL)
-	result2 = await storage.save_document(
+	# Update with second version (same URL, different hash)
+	result2, doc_id2 = await storage.save_document_metadata(
 		domain="unique.com",
 		url=url,
 		path="/doc",
-		content=content2,
-		content_hash=_hash(content2),
+		content_hash=content2_hash,
 		depth=0,
 	)
 	assert result2 == SaveResult.UPDATED
-
-	# Should only have one document
-	doc = await storage.get_document_by_url(url)
-	assert doc is not None
-	assert doc.content == content2
+	assert doc_id2 == doc_id1  # Same document
 
 
 @pytest.mark.asyncio
@@ -668,26 +724,3 @@ async def test_save_rating_foreign_key_constraint(test_db):
 
 	with pytest.raises(sqlalchemy.exc.IntegrityError):
 		await storage.save_rating(rating)
-
-
-@pytest.mark.asyncio
-async def test_large_content_storage(test_db):
-	"""Test storing large content."""
-	# Create a large document (~100KB)
-	large_content = "# Large Document\n\n" + ("Lorem ipsum dolor sit amet. " * 5000)
-
-	result = await storage.save_document(
-		domain="large.com",
-		url="https://large.com/big-doc",
-		path="/big-doc",
-		content=large_content,
-		content_hash=_hash(large_content),
-		depth=0,
-	)
-
-	assert result == SaveResult.INSERTED
-
-	doc = await storage.get_document_by_url("https://large.com/big-doc")
-	assert doc is not None
-	assert len(doc.content) == len(large_content)
-	assert doc.content == large_content

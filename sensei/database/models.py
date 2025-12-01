@@ -3,6 +3,7 @@
 from sqlalchemy import (
 	CheckConstraint,
 	Column,
+	Computed,
 	DateTime,
 	ForeignKey,
 	Integer,
@@ -10,7 +11,7 @@ from sqlalchemy import (
 	Text,
 	func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import declarative_base, declared_attr
 
 
@@ -80,7 +81,12 @@ class Rating(TimestampMixin, Base):
 
 
 class Document(TimestampMixin, Base):
-	"""Stores documentation fetched from llms.txt sources."""
+	"""Container for documentation fetched from llms.txt sources.
+
+	Documents are containers; sections hold the actual content.
+	This separation allows FTS to work on sections that fit within PostgreSQL's
+	tsvector size limit, while maintaining document-level metadata.
+	"""
 
 	__tablename__ = "documents"
 
@@ -88,9 +94,45 @@ class Document(TimestampMixin, Base):
 	domain = Column(String, nullable=False, index=True)  # e.g. "react.dev"
 	url = Column(String, nullable=False, unique=True)  # Full URL
 	path = Column(String, nullable=False)  # e.g. "/docs/hooks/useState.md"
-	content = Column(Text, nullable=False)  # Markdown content
 	content_hash = Column(String, nullable=False)  # For change detection on upsert
 	content_refreshed_at = Column(
 		DateTime(timezone=True), nullable=False, server_default=func.now()
 	)  # When content was last refreshed
 	depth = Column(Integer, nullable=False, server_default="0")  # 0 = llms.txt, 1+ = linked
+
+
+class Section(TimestampMixin, Base):
+	"""Content section within a document, organized by markdown headings.
+
+	Sections form a tree structure via parent_section_id, allowing:
+	- FTS search on individual sections (always fits tsvector limit)
+	- Subtree retrieval for specific headings
+	- Full document reconstruction via position ordering
+	- Heading breadcrumbs via parent traversal
+	"""
+
+	__tablename__ = "sections"
+
+	id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+	document_id = Column(
+		UUID(as_uuid=True),
+		ForeignKey("documents.id", ondelete="CASCADE"),
+		nullable=False,
+		index=True,
+	)
+	parent_section_id = Column(
+		UUID(as_uuid=True),
+		ForeignKey("sections.id", ondelete="CASCADE"),
+		nullable=True,  # Null for root sections
+		index=True,
+	)
+	heading = Column(String, nullable=True)  # Null for intro/root content before first heading
+	level = Column(Integer, nullable=False)  # 0=root, 1=h1, 2=h2, etc.
+	content = Column(Text, nullable=False)  # This section's markdown content
+	position = Column(Integer, nullable=False)  # Global order in original document
+	# Full-text search vector - computed by PostgreSQL on section content
+	search_vector = Column(
+		TSVECTOR,
+		Computed("to_tsvector('english', content)", persisted=True),
+		nullable=True,
+	)

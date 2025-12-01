@@ -39,15 +39,17 @@ async def search(
 	query: Annotated[str, Field(description="Keywords to search for in cached queries")],
 	limit: Annotated[int, Field(description="Maximum number of results", ge=1, le=50)] = 10,
 ) -> str:
-	"""Search cached queries for relevant past answers.
+	"""Search the knowledge cache for previously researched topics.
 
-	Use this to find previously answered documentation questions that might help.
-	Returns a list of matching queries with IDs, which you can retrieve in full
-	using the get tool.
+	The cache stores past research as reusable building blocks. When answering a
+	complex question, decompose it into parts and search for each - e.g., "compare
+	fumadocs vs docusaurus" becomes separate searches for each framework.
+
+	Returns matching queries with IDs. Use the `get` tool to retrieve full responses.
 
 	Examples:
-	    - query="react hooks" - find cached answers about React hooks
-	    - query="async patterns", limit=5 - top 5 async pattern answers
+	    - query="react hooks" - find cached research about React hooks
+	    - query="fastapi authentication" - find auth patterns for FastAPI
 	"""
 	match await _search_cache(query, limit=limit):
 		case Success(result):
@@ -60,13 +62,13 @@ async def search(
 async def get(
 	query_id: Annotated[str, Field(description="The ID of the cached query to retrieve")],
 ) -> str:
-	"""Retrieve a full cached response by query ID.
+	"""Retrieve a full cached response by its ID.
 
-	Use this after finding relevant cache hits with the search tool.
-	Returns the complete original query and cached response with metadata.
+	Use this after finding relevant hits with the `search` tool. Returns the
+	complete cached research including the original query, response, and metadata.
 
-	Example:
-	    - query_id="abc123" - get the full cached response for query abc123
+	Cached responses can be composed together to answer new questions without
+	re-doing the same research.
 	"""
 	# Convert str → UUID at the edge (MCP receives JSON strings)
 	match await _get_cached_response(UUID(query_id)):
