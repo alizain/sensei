@@ -11,6 +11,7 @@ import logging
 from uuid import UUID
 
 from sensei.database import storage
+from sensei.database.models import Section
 from sensei.types import NoResults, SearchResult, Success, TOCEntry, ToolError
 
 logger = logging.getLogger(__name__)
@@ -46,19 +47,75 @@ async def tome_get(
 
     logger.debug(f"tome_get: domain={domain}, path={actual_path}, heading={heading}")
 
-    if heading:
-        # Get specific section subtree
-        sections = await storage.get_section_subtree_by_heading(domain, actual_path, heading)
-    else:
-        # Get all sections for full document
-        sections = await storage.get_sections_by_document(domain, actual_path)
-
+    sections = await storage.get_sections_by_document(domain, actual_path)
     if not sections:
         return NoResults()
+
+    if heading:
+        # Filter to subtree starting at the specified heading
+        sections = _get_subtree(sections, heading)
+        if not sections:
+            return NoResults()
 
     # Concatenate section content in position order
     content = "\n\n".join(s.content for s in sections if s.content)
     return Success(content)
+
+
+def _get_subtree(sections: list[Section], heading: str) -> list[Section]:
+    """Extract a section and all its descendants from a flat list.
+
+    Args:
+        sections: Flat list of sections ordered by position
+        heading: Heading text to find
+
+    Returns:
+        List of sections (the matching section + all descendants)
+    """
+    # Find the root section by heading
+    root = next((s for s in sections if s.heading == heading), None)
+    if not root:
+        return []
+
+    # Build set of IDs in subtree by traversing parent relationships
+    subtree_ids = {root.id}
+    # Keep adding children until no more are found
+    changed = True
+    while changed:
+        changed = False
+        for s in sections:
+            if s.parent_section_id in subtree_ids and s.id not in subtree_ids:
+                subtree_ids.add(s.id)
+                changed = True
+
+    # Return sections in original order (by position)
+    return [s for s in sections if s.id in subtree_ids]
+
+
+def _normalize_path_prefixes(paths: list[str] | None) -> list[str] | None:
+    """Normalize path prefixes for LIKE queries.
+
+    Ensures each path:
+    - Starts with / (for consistent matching)
+    - Ends with % (for prefix matching)
+
+    Args:
+        paths: Raw path prefixes from user (e.g., ["hooks", "/api"])
+
+    Returns:
+        Normalized LIKE patterns (e.g., ["/hooks%", "/api%"]) or None
+    """
+    if not paths:
+        return None
+
+    normalized = []
+    for path in paths:
+        prefix = path if path.startswith("/") else f"/{path}"
+        # Add % for LIKE prefix matching if not already present
+        if not prefix.endswith("%"):
+            prefix = f"{prefix}%"
+        normalized.append(prefix)
+    return normalized
 
 
 async def tome_search(
@@ -87,10 +144,14 @@ async def tome_search(
 
     logger.debug(f"tome_search: domain={domain}, query={query}, paths={paths}")
 
-    results = await storage.search_sections_fts(domain, query, paths, limit)
-    if results:
-        return Success(results)
-    return NoResults()
+    # Normalize paths for LIKE pattern matching
+    path_prefixes = _normalize_path_prefixes(paths)
+
+    results = await storage.search_sections_fts(domain, query, path_prefixes, limit)
+    if not results:
+        return NoResults()
+
+    return Success(results)
 
 
 async def tome_toc(
@@ -119,7 +180,7 @@ async def tome_toc(
     logger.debug(f"tome_toc: domain={domain}, path={actual_path}")
 
     # Get section hierarchy data
-    sections = await storage.get_sections_for_toc(domain, actual_path)
+    sections = await storage.get_sections_by_document(domain, actual_path)
     if not sections:
         return NoResults()
 
@@ -131,13 +192,11 @@ async def tome_toc(
     return Success(toc)
 
 
-def _build_toc_tree(
-    sections: list[tuple[UUID, UUID | None, str | None, int]],
-) -> list[TOCEntry]:
-    """Build TOCEntry tree from flat section data.
+def _build_toc_tree(sections: list[Section]) -> list[TOCEntry]:
+    """Build TOCEntry tree from sections.
 
     Args:
-        sections: List of (id, parent_section_id, heading, level) tuples
+        sections: List of Section objects
 
     Returns:
         List of root TOCEntry objects with nested children
@@ -146,10 +205,10 @@ def _build_toc_tree(
     nodes: dict[UUID, TOCEntry] = {}
     parent_map: dict[UUID, UUID | None] = {}
 
-    for section_id, parent_id, heading, level in sections:
-        if heading:  # Only include sections with headings
-            nodes[section_id] = TOCEntry(heading=heading, level=level, children=[])
-            parent_map[section_id] = parent_id
+    for section in sections:
+        if section.heading:  # Only include sections with headings
+            nodes[section.id] = TOCEntry(heading=section.heading, level=section.level, children=[])
+            parent_map[section.id] = section.parent_section_id
 
     # Build tree by linking children to parents
     root_entries: list[TOCEntry] = []

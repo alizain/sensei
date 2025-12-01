@@ -23,7 +23,7 @@ from sensei.database.storage import (
     activate_generation,
     cleanup_old_generations,
     insert_document,
-    save_sections,
+    insert_sections,
 )
 from sensei.tome.chunker import SectionData, chunk_markdown
 from sensei.tome.parser import extract_path, is_same_domain, parse_llms_txt_links
@@ -72,6 +72,9 @@ def flatten_section_tree(
     This function flattens the tree by pre-generating UUIDs for each section, allowing
     child sections to reference their parent's ID before database insertion.
 
+    Also computes heading_path for each section (e.g., "API > Hooks > useState") to
+    avoid expensive recursive CTE on every FTS search query.
+
     Args:
         root: Root SectionData from chunker containing the tree structure
         document_id: UUID of the document these sections belong to
@@ -83,9 +86,13 @@ def flatten_section_tree(
     sections: list[Section] = []
     position = [0]  # Use list to allow mutation in nested function
 
-    def walk(node: SectionData, parent_id: UUID | None) -> None:
+    def walk(node: SectionData, parent_id: UUID | None, path_parts: list[str]) -> None:
         # Only create section if there's content or children
         if node.content or node.children:
+            # Build heading path from ancestors + current heading
+            current_path = path_parts + ([node.heading] if node.heading else [])
+            heading_path = " > ".join(current_path) if current_path else None
+
             section = Section(
                 document_id=document_id,
                 parent_section_id=parent_id,
@@ -93,15 +100,16 @@ def flatten_section_tree(
                 level=node.level,
                 content=node.content or "",  # Ensure non-null for DB constraint
                 position=position[0],
+                heading_path=heading_path,
             )
             position[0] += 1
             sections.append(section)
 
-            # Recurse with this section's ID as parent
+            # Recurse with this section's ID as parent and updated path
             for child in node.children:
-                walk(child, section.id)
+                walk(child, section.id, current_path)
 
-    walk(root, None)
+    walk(root, None, [])
     return sections
 
 
@@ -187,11 +195,11 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
         )
         result.documents_added += 1
 
-        # Chunk markdown, flatten tree, and save sections
+        # Chunk markdown, flatten tree, and insert sections
         section_tree = chunk_markdown(content)
         sections = flatten_section_tree(section_tree, doc_id)
-        await save_sections(doc_id, sections)
-        logger.debug(f"Saved {len(sections)} sections for {url}")
+        await insert_sections(sections)
+        logger.debug(f"Inserted {len(sections)} sections for {url}")
 
         # Parse links and enqueue same-domain ones if within depth limit
         if current_depth < max_depth:

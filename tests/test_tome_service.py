@@ -59,7 +59,7 @@ async def sample_docs(test_db):
         )
         section_tree = chunk_markdown(doc["content"])
         sections = flatten_section_tree(section_tree, doc_id)
-        await storage.save_sections(doc_id, sections)
+        await storage.insert_sections(sections)
 
     # Activate the generation to make documents visible
     await storage.activate_generation("react.dev", generation_id)

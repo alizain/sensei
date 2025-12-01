@@ -37,7 +37,6 @@ async def test_parent_child_query_relationship(integration_db):
     parent_id = await storage.save_query(
         query="Why are my React hooks breaking?",
         output="# Analysis\n\nLet me break this down...",
-        depth=0,
     )
 
     # Create child
@@ -45,11 +44,9 @@ async def test_parent_child_query_relationship(integration_db):
         query="How do React hooks work?",
         output="# React Hooks Basics\n\n...",
         parent_id=parent_id,
-        depth=1,
     )
 
     # Verify relationship
     child = await storage.get_query(child_id)
     assert child is not None
     assert child.parent_id == parent_id
-    assert child.depth == 1

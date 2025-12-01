@@ -78,8 +78,8 @@ async def test_get_query_not_found(test_db):
 
 
 @pytest.mark.asyncio
-async def test_save_query_with_parent_and_depth(test_db):
-    """Test saving a sub-query with parent reference and depth."""
+async def test_save_query_with_parent(test_db):
+    """Test saving a sub-query with parent reference."""
     # Create parent query
     parent_id = await storage.save_query(query="Main question?", output="Main answer")
 
@@ -88,36 +88,33 @@ async def test_save_query_with_parent_and_depth(test_db):
         query="Sub question?",
         output="Sub answer",
         parent_id=parent_id,
-        depth=1,
     )
 
-    # Verify child has correct parent and depth
+    # Verify child has correct parent
     child = await storage.get_query(child_id)
     assert child is not None
     assert child.parent_id == parent_id
-    assert child.depth == 1
 
-    # Verify parent has no parent and depth 0
+    # Verify parent has no parent
     parent = await storage.get_query(parent_id)
     assert parent is not None
     assert parent.parent_id is None
-    assert parent.depth == 0
 
 
 @pytest.mark.asyncio
 async def test_search_queries(test_db):
-    """Test search queries using ILIKE."""
+    """Test search queries using FTS."""
     # Insert test data
     await storage.save_query(query="How do React hooks work?", output="Answer 1", library="react", version="18")
     await storage.save_query(query="React component lifecycle", output="Answer 2", library="react")
     await storage.save_query(query="Python async await", output="Answer 3", library="python")
 
     # Search for "React"
-    results = await storage.search_queries(["React"], limit=10)
+    results = await storage.search_queries("React", limit=10)
     assert len(results) == 2
 
     # Search that matches nothing
-    results = await storage.search_queries(["nonexistent"], limit=10)
+    results = await storage.search_queries("nonexistent", limit=10)
     assert len(results) == 0
 
 
@@ -301,9 +298,9 @@ async def test_save_and_get_sections(test_db):
         ],
     )
 
-    # Flatten tree and save sections
+    # Flatten tree and insert sections
     sections = flatten_section_tree(section_tree, doc_id)
-    count = await storage.save_sections(doc_id, sections)
+    count = await storage.insert_sections(sections)
     assert count == 3  # Root + 2 children
 
     # Retrieve sections (only works for active documents)
@@ -350,13 +347,18 @@ async def test_search_sections_fts(test_db):
         ],
     )
     sections = flatten_section_tree(section_tree, doc_id)
-    await storage.save_sections(doc_id, sections)
+    await storage.insert_sections(sections)
 
     # Search for "Hook"
     results = await storage.search_sections_fts("react.dev", "Hook")
     assert len(results) >= 1
-    # Results should have heading_path
-    assert all(hasattr(r, "heading_path") for r in results)
+    # Results should be SearchResult objects
+    result = results[0]
+    assert result.url == "https://react.dev/hooks"
+    assert result.path == "/hooks"
+    assert isinstance(result.snippet, str)
+    assert isinstance(result.rank, float)
+    assert isinstance(result.heading_path, str)
 
     # Search with no matches
     results = await storage.search_sections_fts("react.dev", "nonexistent")
@@ -387,7 +389,7 @@ async def test_search_sections_fts_inactive_not_found(test_db):
         children=[],
     )
     sections = flatten_section_tree(section_tree, doc_id)
-    await storage.save_sections(doc_id, sections)
+    await storage.insert_sections(sections)
 
     # Search should find nothing (document not active)
     results = await storage.search_sections_fts("test.dev", "searchable")
@@ -490,7 +492,7 @@ async def test_migration_queries_columns(test_db):
         "output",
         "messages",
         "parent_id",
-        "depth",
+        "query_tsvector",
         "inserted_at",
         "updated_at",
     }
@@ -576,7 +578,8 @@ async def test_migration_sections_columns(test_db):
         "level",
         "content",
         "position",
-        "search_vector",
+        "heading_path",
+        "content_tsvector",
         "inserted_at",
         "updated_at",
     }
@@ -596,12 +599,12 @@ async def test_migration_sections_fts_index(test_db):
 
         indexes = await conn.run_sync(get_indexes)
 
-    assert "idx_sections_search_vector" in indexes
+    assert "idx_sections_content_tsvector" in indexes
 
 
 @pytest.mark.asyncio
 async def test_migration_documents_domain_index(test_db):
-    """Verify documents table has domain index and active partial index."""
+    """Verify documents table has domain index and active partial indexes."""
     from sqlalchemy import inspect
 
     async with test_db.connect() as conn:
@@ -613,7 +616,8 @@ async def test_migration_documents_domain_index(test_db):
         indexes = await conn.run_sync(get_indexes)
 
     assert "ix_documents_domain" in indexes
-    assert "idx_documents_domain_active" in indexes  # Partial index for active docs
+    assert "idx_documents_domain_active" in indexes  # Partial index for active docs (domain only)
+    assert "idx_documents_domain_path_active" in indexes  # Composite partial index (domain, path)
 
 
 @pytest.mark.asyncio
@@ -694,27 +698,38 @@ async def test_search_queries_case_insensitive(test_db):
     await storage.save_query(query="How do REACT hooks work?", output="Answer")
 
     # Should find regardless of case
-    results = await storage.search_queries(["react"])
+    results = await storage.search_queries("react")
     assert len(results) == 1
 
-    results = await storage.search_queries(["REACT"])
+    results = await storage.search_queries("REACT")
     assert len(results) == 1
 
-    results = await storage.search_queries(["ReAcT"])
+    results = await storage.search_queries("ReAcT")
     assert len(results) == 1
 
 
 @pytest.mark.asyncio
-async def test_search_queries_partial_match(test_db):
-    """Test that search matches partial terms."""
+async def test_search_queries_fts_word_match(test_db):
+    """Test that search matches words using FTS (not substring matching).
+
+    FTS matches on word stems, not substrings:
+    - "React" matches "React" (exact word)
+    - "understanding" matches "Understanding" (case-insensitive, same stem)
+    - "State" does NOT match "useState" (different words)
+    """
     await storage.save_query(query="Understanding useState in React", output="Answer")
 
-    # Should match partial term
-    results = await storage.search_queries(["State"])
+    # Should match exact word (case-insensitive)
+    results = await storage.search_queries("React")
     assert len(results) == 1
 
-    results = await storage.search_queries(["stand"])
+    # Should match word stem
+    results = await storage.search_queries("understand")
     assert len(results) == 1
+
+    # FTS does NOT match substrings - "State" is not in "useState"
+    results = await storage.search_queries("State")
+    assert len(results) == 0
 
 
 @pytest.mark.asyncio
@@ -725,10 +740,10 @@ async def test_search_queries_respects_limit(test_db):
         await storage.save_query(query=f"React question {i}", output=f"Answer {i}")
 
     # Verify limit works
-    results = await storage.search_queries(["React"], limit=3)
+    results = await storage.search_queries("React", limit=3)
     assert len(results) == 3
 
-    results = await storage.search_queries(["React"], limit=5)
+    results = await storage.search_queries("React", limit=5)
     assert len(results) == 5
 
 
@@ -764,21 +779,19 @@ async def test_document_url_uniqueness(test_db):
 @pytest.mark.asyncio
 async def test_query_parent_child_chain(test_db):
     """Test multi-level parent-child query chain."""
-    # Create chain: root -> child1 -> grandchild
-    root_id = await storage.save_query(query="Root query", output="Root answer", depth=0)
+    # Create chain: root -> child -> grandchild
+    root_id = await storage.save_query(query="Root query", output="Root answer")
 
     child_id = await storage.save_query(
         query="Child query",
         output="Child answer",
         parent_id=root_id,
-        depth=1,
     )
 
     grandchild_id = await storage.save_query(
         query="Grandchild query",
         output="Grandchild answer",
         parent_id=child_id,
-        depth=2,
     )
 
     # Verify chain
@@ -787,13 +800,8 @@ async def test_query_parent_child_chain(test_db):
     grandchild = await storage.get_query(grandchild_id)
 
     assert root.parent_id is None
-    assert root.depth == 0
-
     assert child.parent_id == root_id
-    assert child.depth == 1
-
     assert grandchild.parent_id == child_id
-    assert grandchild.depth == 2
 
 
 @pytest.mark.asyncio

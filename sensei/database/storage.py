@@ -57,7 +57,6 @@ async def save_query(
     library: Optional[str] = None,
     version: Optional[str] = None,
     parent_id: Optional[UUID] = None,
-    depth: int = 0,
 ) -> UUID:
     """Save a query and its response to the database.
 
@@ -69,12 +68,11 @@ async def save_query(
         library: Optional library/framework name
         version: Optional version specification
         parent_id: Optional parent query ID for sub-queries
-        depth: Recursion depth (0 = top-level)
 
     Returns:
         The generated UUID for the saved query
     """
-    logger.info(f"Saving query to database: parent={parent_id}, depth={depth}")
+    logger.info(f"Saving query to database: parent={parent_id}")
     async with AsyncSessionLocal() as session:
         query_record = Query(
             query=query,
@@ -84,12 +82,11 @@ async def save_query(
             output=output,
             messages=messages.decode("utf-8") if messages else None,
             parent_id=parent_id,
-            depth=depth,
         )
         session.add(query_record)
         await session.commit()
         await session.refresh(query_record)
-        logger.debug(f"Query saved: id={query_record.id}, depth={depth}")
+        logger.debug(f"Query saved: id={query_record.id}")
         return query_record.id
 
 
@@ -129,58 +126,57 @@ async def get_query(id: UUID) -> Optional[Query]:
 
 
 async def search_queries(
-    terms: list[str],
+    query: str,
     limit: int = 10,
 ) -> list[CacheHit]:
-    """Search cached queries using ILIKE, AND-ing all terms.
+    """Search cached queries using PostgreSQL full-text search.
 
-    Each term is matched as a case-insensitive substring. All terms must match
-    for a query to be included in results.
+    Uses websearch_to_tsquery for natural language query parsing
+    and ts_rank for relevance ordering.
 
     Args:
-        terms: List of search terms (all must match via ILIKE)
+        query: Natural language search query
         limit: Maximum results to return
 
     Returns:
         List of CacheHit objects
     """
-    logger.debug(f"Search: terms={terms}")
+    logger.debug(f"Search queries: query={query}")
 
-    if not terms:
+    if not query.strip():
         return []
 
     async with AsyncSessionLocal() as session:
-        # Build WHERE clause: query ILIKE '%term1%' AND query ILIKE '%term2%' ...
-        conditions = " AND ".join([f"query ILIKE :term{i}" for i in range(len(terms))])
-        params: dict = {f"term{i}": f"%{term}%" for i, term in enumerate(terms)}
-        params["limit"] = limit
-
-        sql = f"""
+        sql = """
             SELECT id, query, library, version, inserted_at
             FROM queries
-            WHERE {conditions}
+            WHERE query_tsvector @@ websearch_to_tsquery('english', :query)
+            ORDER BY ts_rank(query_tsvector, websearch_to_tsquery('english', :query)) DESC
             LIMIT :limit
         """
 
-        result = await session.execute(text(sql), params)
+        result = await session.execute(
+            text(sql),
+            {"query": query, "limit": limit},
+        )
         rows = result.fetchall()
 
-        now = datetime.now(UTC)
-        hits = []
-        for row in rows:
-            query_id, query_text, lib, ver, inserted_at = row
-            # inserted_at is timezone-aware from DB, no coercion needed
-            age_days = (now - inserted_at).days if inserted_at else 0
-            hits.append(
-                CacheHit(
-                    query_id=query_id,
-                    query_truncated=query_text[:100] if query_text else "",
-                    age_days=age_days,
-                    library=lib,
-                    version=ver,
-                )
+    # Transform to CacheHit objects
+    now = datetime.now(UTC)
+    hits = []
+    for row in rows:
+        query_id, query_text, lib, ver, inserted_at = row
+        age_days = (now - inserted_at).days if inserted_at else 0
+        hits.append(
+            CacheHit(
+                query_id=query_id,
+                query_truncated=query_text[:100] if query_text else "",
+                age_days=age_days,
+                library=lib,
+                version=ver,
             )
-        return hits
+        )
+    return hits
 
 
 async def insert_document(
@@ -280,31 +276,27 @@ async def cleanup_old_generations(domain: str) -> int:
         return count
 
 
-async def save_sections(
-    document_id: UUID,
-    sections: list[Section],
-) -> int:
-    """Save sections for a document, replacing any existing sections.
+async def insert_sections(sections: list[Section]) -> int:
+    """Insert sections into the database.
 
-    Expects a flat list of Section models with parent_section_id relationships
-    already set (via flatten_section_tree in crawler.py).
+    Expects Section models with all relationships already set
+    (via flatten_section_tree in crawler.py).
 
     Args:
-        document_id: The document these sections belong to
         sections: Flat list of Section models to insert
 
     Returns:
-        Number of sections saved
+        Number of sections inserted
     """
-    async with AsyncSessionLocal() as session:
-        # Delete existing sections for this document (cascade will handle children)
-        await session.execute(delete(Section).where(Section.document_id == document_id))
+    if not sections:
+        return 0
 
-        # Bulk insert all sections
+    async with AsyncSessionLocal() as session:
         session.add_all(sections)
         await session.commit()
 
-        logger.info(f"Saved {len(sections)} sections for document {document_id}")
+        doc_id = sections[0].document_id if sections else None
+        logger.info(f"Inserted {len(sections)} sections for document {doc_id}")
         return len(sections)
 
 
@@ -340,84 +332,18 @@ async def get_sections_by_document(
         List of Section objects ordered by position
     """
     async with AsyncSessionLocal() as session:
-        # Find the active document
-        doc_result = await session.execute(
-            select(Document).where(
-                Document.domain == domain,
-                Document.path == path,
-                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
-            )
-        )
-        doc = doc_result.scalar_one_or_none()
-        if not doc:
-            return []
-
-        # Get all sections ordered by position
-        result = await session.execute(select(Section).where(Section.document_id == doc.id).order_by(Section.position))
-        return list(result.scalars().all())
-
-
-async def get_section_subtree_by_heading(
-    domain: str,
-    path: str,
-    heading: str,
-) -> list[Section]:
-    """Get a section and all its descendants by heading.
-
-    Uses recursive CTE to traverse the parent_section_id tree.
-    Only returns sections from active (visible) documents.
-
-    Args:
-        domain: Document domain
-        path: Document path
-        heading: Heading text to find
-
-    Returns:
-        List of Section objects (the matching section + all descendants)
-    """
-    async with AsyncSessionLocal() as session:
-        # Find the active document
-        doc_result = await session.execute(
-            select(Document).where(
-                Document.domain == domain,
-                Document.path == path,
-                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
-            )
-        )
-        doc = doc_result.scalar_one_or_none()
-        if not doc:
-            return []
-
-        # Use recursive CTE to get subtree
-        sql = """
-            WITH RECURSIVE subtree AS (
-                SELECT * FROM sections
-                WHERE document_id = :doc_id AND heading = :heading
-                UNION ALL
-                SELECT s.* FROM sections s
-                JOIN subtree t ON s.parent_section_id = t.id
-            )
-            SELECT * FROM subtree ORDER BY position
-        """
+        # Single query with JOIN instead of two separate queries
         result = await session.execute(
-            text(sql),
-            {"doc_id": str(doc.id), "heading": heading},
-        )
-        rows = result.fetchall()
-
-        # Convert to Section objects
-        return [
-            Section(
-                id=row.id,
-                document_id=row.document_id,
-                parent_section_id=row.parent_section_id,
-                heading=row.heading,
-                level=row.level,
-                content=row.content,
-                position=row.position,
+            select(Section)
+            .join(Document, Document.id == Section.document_id)
+            .where(
+                Document.domain == domain,
+                Document.path == path,
+                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
             )
-            for row in rows
-        ]
+            .order_by(Section.position)
+        )
+        return list(result.scalars().all())
 
 
 async def get_document_by_url(url: str, active_only: bool = True) -> Optional[Document]:
@@ -460,100 +386,58 @@ async def delete_documents_by_domain(domain: str) -> int:
 async def search_sections_fts(
     domain: str,
     query: str,
-    paths: list[str] | None = None,
+    path_prefixes: list[str] | None = None,
     limit: int = 10,
 ) -> list[SearchResult]:
     """Search sections using PostgreSQL full-text search.
 
     Uses websearch_to_tsquery() for natural language query parsing,
-    ts_headline() for snippets, and recursive CTE for heading breadcrumbs.
+    ts_headline() for snippets, and precomputed heading_path column.
 
     Args:
         domain: Domain to search within (required)
         query: Natural language search query
-        paths: Optional path prefixes to filter (e.g., ["/hooks"] matches "/hooks/useState")
+        path_prefixes: Optional LIKE patterns for path filtering (e.g., ["/hooks%"])
+                      Should already be normalized (start with /, end with %)
         limit: Maximum results to return
 
     Returns:
-        List of SearchResult objects ordered by relevance, with heading_path
+        List of SearchResult objects
     """
-    logger.debug(f"FTS search: domain={domain}, query={query}, paths={paths}")
+    logger.debug(f"FTS search: domain={domain}, query={query}, path_prefixes={path_prefixes}")
 
     if not query.strip():
         return []
 
     async with AsyncSessionLocal() as session:
-        # Build the SQL with heading_path via recursive CTE
+        # Simple query using precomputed heading_path column
         # Only search active documents (generation_active = true)
         sql = """
-            WITH RECURSIVE ancestors AS (
-                -- Start with matching sections from active documents
-                SELECT
-                    s.id,
-                    s.parent_section_id,
-                    s.heading,
-                    s.content,
-                    s.document_id,
-                    ts_rank(s.search_vector, websearch_to_tsquery('english', :query)) as rank,
-                    ARRAY[s.heading] as path_array,
-                    1 as depth
-                FROM sections s
-                JOIN documents d ON s.document_id = d.id
-                WHERE d.domain = :domain
-                  AND d.generation_active = true
-                  AND s.search_vector @@ websearch_to_tsquery('english', :query)
+            SELECT
+                d.url,
+                d.path,
+                ts_headline('english', s.content, websearch_to_tsquery('english', :query),
+                           'MaxWords=50, MinWords=20, StartSel=**, StopSel=**') as snippet,
+                ts_rank(s.content_tsvector, websearch_to_tsquery('english', :query)) as rank,
+                s.heading_path
+            FROM sections s
+            JOIN documents d ON s.document_id = d.id
+            WHERE d.domain = :domain
+              AND d.generation_active = true
+              AND s.content_tsvector @@ websearch_to_tsquery('english', :query)
         """
 
         params: dict = {"domain": domain, "query": query, "limit": limit}
 
-        # Add path prefix filtering if specified
-        if paths:
-            path_conditions = " OR ".join([f"d.path LIKE :path{i}" for i in range(len(paths))])
+        # Add path prefix filtering if specified (expects pre-normalized LIKE patterns)
+        if path_prefixes:
+            path_conditions = " OR ".join([f"d.path LIKE :path{i}" for i in range(len(path_prefixes))])
             sql += f" AND ({path_conditions})"
-            for i, path in enumerate(paths):
-                prefix = path if path.startswith("/") else f"/{path}"
-                params[f"path{i}"] = f"{prefix}%"
+            for i, prefix in enumerate(path_prefixes):
+                params[f"path{i}"] = prefix
 
         sql += """
-                UNION ALL
-                -- Recursively get ancestors
-                SELECT
-                    a.id,
-                    p.parent_section_id,
-                    p.heading,
-                    a.content,
-                    a.document_id,
-                    a.rank,
-                    p.heading || a.path_array,
-                    a.depth + 1
-                FROM ancestors a
-                JOIN sections p ON a.parent_section_id = p.id
-                WHERE a.depth < 10  -- Prevent infinite loops
-            ),
-            -- Get the full path for each original section
-            full_paths AS (
-                SELECT DISTINCT ON (id)
-                    id,
-                    content,
-                    document_id,
-                    rank,
-                    path_array
-                FROM ancestors
-                ORDER BY id, depth DESC
-            )
-            SELECT
-                d.url,
-                d.path,
-                ts_headline('english', fp.content, websearch_to_tsquery('english', :query),
-                           'MaxWords=50, MinWords=20, StartSel=**, StopSel=**') as snippet,
-                fp.rank,
-                array_to_string(
-                    array_remove(fp.path_array, NULL),
-                    ' > '
-                ) as heading_path
-            FROM full_paths fp
-            JOIN documents d ON fp.document_id = d.id
-            ORDER BY fp.rank DESC
+            ORDER BY rank DESC
             LIMIT :limit
         """
 
@@ -570,46 +454,3 @@ async def search_sections_fts(
             )
             for row in rows
         ]
-
-
-async def get_sections_for_toc(
-    domain: str,
-    path: str,
-) -> list[tuple[UUID, UUID | None, str | None, int]]:
-    """Get section hierarchy data for building TOC.
-
-    Returns minimal data needed to build a TOCEntry tree.
-    Only returns sections from active (visible) documents.
-
-    Args:
-        domain: Document domain
-        path: Document path
-
-    Returns:
-        List of tuples: (id, parent_section_id, heading, level)
-    """
-    async with AsyncSessionLocal() as session:
-        # Find the active document
-        doc_result = await session.execute(
-            select(Document).where(
-                Document.domain == domain,
-                Document.path == path,
-                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
-            )
-        )
-        doc = doc_result.scalar_one_or_none()
-        if not doc:
-            return []
-
-        # Get section hierarchy data
-        result = await session.execute(
-            select(
-                Section.id,
-                Section.parent_section_id,
-                Section.heading,
-                Section.level,
-            )
-            .where(Section.document_id == doc.id)
-            .order_by(Section.position)
-        )
-        return [(row.id, row.parent_section_id, row.heading, row.level) for row in result]

@@ -77,3 +77,6 @@ dev = [
 asyncio_mode = "auto"
 log_cli = true
 log_cli_level = "WARN"
+markers = [
+    "integration: marks tests as integration tests (require real network)",
+]

@@ -147,7 +147,6 @@ async def spawn_sub_agent(
         output=result.output,
         messages=result.new_messages_json(),
         parent_id=ctx.deps.query_id,
-        depth=current_depth + 1,
     )
 
     logger.info("Sub-agent completed")

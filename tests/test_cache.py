@@ -75,8 +75,8 @@ async def test_search_cache_tool():
 
         result = await search_cache("React hooks", limit=5)
 
-        # search_cache splits the search term into words for AND-matching
-        mock_search.assert_called_once_with(["React", "hooks"], limit=5)
+        # search_cache passes the query string directly to storage
+        mock_search.assert_called_once_with("React hooks", limit=5)
         from sensei.types import Success
 
         assert isinstance(result, Success)

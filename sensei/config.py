@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="",
+        default="postgresql+asyncpg://sensei:sensei@localhost:5432/sensei",
         description="Database connection URL",
     )
 

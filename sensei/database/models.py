@@ -54,9 +54,13 @@ class Query(TimestampMixin, Base):
     version = Column(String, nullable=True)  # Version specification
     output = Column(Text, nullable=False)  # Final text output from agent
     messages = Column(Text, nullable=True)  # JSON: all intermediate messages (tool calls, results)
-    # Cache hierarchy fields
     parent_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=True)
-    depth = Column(Integer, server_default="0", nullable=False)
+    # Full-text search vector for efficient cache search
+    query_tsvector = Column(
+        TSVECTOR,
+        Computed("to_tsvector('english', query)", persisted=True),
+        nullable=True,
+    )
 
 
 class Rating(TimestampMixin, Base):
@@ -141,8 +145,11 @@ class Section(TimestampMixin, Base):
     level = Column(Integer, nullable=False)  # 0=root, 1=h1, 2=h2, etc.
     content = Column(Text, nullable=False)  # This section's markdown content
     position = Column(Integer, nullable=False)  # Global order in original document
+    # Precomputed heading breadcrumb path (e.g., "API > Hooks > useState")
+    # Populated at crawl time from ancestor traversal, avoids recursive CTE on search
+    heading_path = Column(String, nullable=True)
     # Full-text search vector - computed by PostgreSQL on section content
-    search_vector = Column(
+    content_tsvector = Column(
         TSVECTOR,
         Computed("to_tsvector('english', content)", persisted=True),
         nullable=True,
