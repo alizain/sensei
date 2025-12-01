@@ -7,6 +7,7 @@ import pytest
 
 from sensei.database import storage
 from sensei.tome.chunker import chunk_markdown
+from sensei.tome.crawler import flatten_section_tree
 from sensei.tome.service import tome_get, tome_search
 from sensei.types import NoResults, SearchResult, Success, ToolError
 
@@ -56,7 +57,8 @@ async def sample_docs(test_db):
             content_hash=_hash(doc["content"]),
             generation_id=generation_id,
         )
-        sections = chunk_markdown(doc["content"])
+        section_tree = chunk_markdown(doc["content"])
+        sections = flatten_section_tree(section_tree, doc_id)
         await storage.save_sections(doc_id, sections)
 
     # Activate the generation to make documents visible

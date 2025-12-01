@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from sensei.database import storage
+from sensei.tome.crawler import flatten_section_tree
 from sensei.types import Rating, SectionData
 
 
@@ -280,7 +281,7 @@ async def test_save_and_get_sections(test_db):
     await storage.activate_generation("react.dev", generation_id)
 
     # Create sections with hierarchy
-    sections = SectionData(
+    section_tree = SectionData(
         heading=None,
         level=0,
         content="# React Hooks Overview",
@@ -300,7 +301,8 @@ async def test_save_and_get_sections(test_db):
         ],
     )
 
-    # Save sections
+    # Flatten tree and save sections
+    sections = flatten_section_tree(section_tree, doc_id)
     count = await storage.save_sections(doc_id, sections)
     assert count == 3  # Root + 2 children
 
@@ -328,7 +330,7 @@ async def test_search_sections_fts(test_db):
     )
     await storage.activate_generation("react.dev", generation_id)
 
-    sections = SectionData(
+    section_tree = SectionData(
         heading=None,
         level=0,
         content="",
@@ -347,6 +349,7 @@ async def test_search_sections_fts(test_db):
             ),
         ],
     )
+    sections = flatten_section_tree(section_tree, doc_id)
     await storage.save_sections(doc_id, sections)
 
     # Search for "Hook"
@@ -377,12 +380,13 @@ async def test_search_sections_fts_inactive_not_found(test_db):
     )
     # NOT activating the generation
 
-    sections = SectionData(
+    section_tree = SectionData(
         heading="Test",
         level=1,
         content="# Test\n\nThis is searchable content.",
         children=[],
     )
+    sections = flatten_section_tree(section_tree, doc_id)
     await storage.save_sections(doc_id, sections)
 
     # Search should find nothing (document not active)

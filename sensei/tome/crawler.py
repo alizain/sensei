@@ -12,19 +12,20 @@ This ensures queries always see a complete, consistent set of documents.
 import hashlib
 import logging
 from datetime import timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from crawlee import ConcurrencySettings, Request
 from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
 from crawlee.storage_clients import MemoryStorageClient
 
+from sensei.database.models import Section
 from sensei.database.storage import (
     activate_generation,
     cleanup_old_generations,
     insert_document,
     save_sections,
 )
-from sensei.tome.chunker import chunk_markdown
+from sensei.tome.chunker import SectionData, chunk_markdown
 from sensei.tome.parser import extract_path, is_same_domain, parse_llms_txt_links
 from sensei.types import Domain, IngestResult, Success, TransientError
 
@@ -59,6 +60,49 @@ def is_markdown_content(content_type: str | None) -> bool:
     # Extract media type (ignore charset and other parameters)
     media_type = content_type.split(";")[0].strip().lower()
     return media_type in ALLOWED_CONTENT_TYPES
+
+
+def flatten_section_tree(
+    root: SectionData,
+    document_id: UUID,
+) -> list[Section]:
+    """Convert SectionData tree to flat list of Section models with parent relationships.
+
+    Tree traversal is business logic (understanding document structure), not storage logic.
+    This function flattens the tree by pre-generating UUIDs for each section, allowing
+    child sections to reference their parent's ID before database insertion.
+
+    Args:
+        root: Root SectionData from chunker containing the tree structure
+        document_id: UUID of the document these sections belong to
+
+    Returns:
+        Flat list of Section models with parent_section_id relationships set,
+        ordered by position for document reconstruction.
+    """
+    sections: list[Section] = []
+    position = [0]  # Use list to allow mutation in nested function
+
+    def walk(node: SectionData, parent_id: UUID | None) -> None:
+        # Only create section if there's content or children
+        if node.content or node.children:
+            section = Section(
+                document_id=document_id,
+                parent_section_id=parent_id,
+                heading=node.heading,
+                level=node.level,
+                content=node.content or "",  # Ensure non-null for DB constraint
+                position=position[0],
+            )
+            position[0] += 1
+            sections.append(section)
+
+            # Recurse with this section's ID as parent
+            for child in node.children:
+                walk(child, section.id)
+
+    walk(root, None)
+    return sections
 
 
 async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult]:
@@ -143,10 +187,11 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
         )
         result.documents_added += 1
 
-        # Chunk markdown and save sections
-        sections = chunk_markdown(content)
+        # Chunk markdown, flatten tree, and save sections
+        section_tree = chunk_markdown(content)
+        sections = flatten_section_tree(section_tree, doc_id)
         await save_sections(doc_id, sections)
-        logger.debug(f"Saved sections for {url}")
+        logger.debug(f"Saved {len(sections)} sections for {url}")
 
         # Parse links and enqueue same-domain ones if within depth limit
         if current_depth < max_depth:

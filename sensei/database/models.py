@@ -1,5 +1,7 @@
 """SQLAlchemy database models for Sensei."""
 
+from uuid import uuid4
+
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -121,7 +123,8 @@ class Section(TimestampMixin, Base):
 
     __tablename__ = "sections"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
+    # default=uuid4 enables client-side ID generation for tree flattening
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, server_default=func.gen_random_uuid())
     document_id = Column(
         UUID(as_uuid=True),
         ForeignKey("documents.id", ondelete="CASCADE"),

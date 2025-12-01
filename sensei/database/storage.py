@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sensei.config import settings
 from sensei.database.models import Document, Query, Section
 from sensei.database.models import Rating as RatingModel
-from sensei.types import CacheHit, Rating, SearchResult, SectionData
+from sensei.types import CacheHit, Rating, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -282,16 +282,16 @@ async def cleanup_old_generations(domain: str) -> int:
 
 async def save_sections(
     document_id: UUID,
-    sections: SectionData,
+    sections: list[Section],
 ) -> int:
     """Save sections for a document, replacing any existing sections.
 
-    Flattens the SectionData tree into rows with parent_section_id
-    relationships and position ordering.
+    Expects a flat list of Section models with parent_section_id relationships
+    already set (via flatten_section_tree in crawler.py).
 
     Args:
         document_id: The document these sections belong to
-        sections: Root SectionData containing the tree structure
+        sections: Flat list of Section models to insert
 
     Returns:
         Number of sections saved
@@ -300,68 +300,12 @@ async def save_sections(
         # Delete existing sections for this document (cascade will handle children)
         await session.execute(delete(Section).where(Section.document_id == document_id))
 
-        # Flatten the tree and insert sections
-        position_counter = [0]  # Use list to allow mutation in nested function
-
-        def flatten(
-            node: SectionData,
-            parent_id: UUID | None = None,
-        ) -> list[Section]:
-            """Recursively flatten SectionData tree into Section models."""
-            result: list[Section] = []
-
-            # Create section for this node
-            section = Section(
-                document_id=document_id,
-                parent_section_id=parent_id,
-                heading=node.heading,
-                level=node.level,
-                content=node.content,
-                position=position_counter[0],
-            )
-            position_counter[0] += 1
-            result.append(section)
-
-            # Recursively process children
-            for child in node.children:
-                # We need to flush to get the section ID for parent relationship
-                session.add(section)
-
-            return result
-
-        # Alternative: flatten iteratively to get IDs properly
-        async def save_tree(
-            node: SectionData,
-            parent_id: UUID | None = None,
-        ) -> int:
-            """Recursively save SectionData tree, returning count."""
-            count = 0
-
-            # Only save if there's content or children
-            if node.content or node.children:
-                section = Section(
-                    document_id=document_id,
-                    parent_section_id=parent_id,
-                    heading=node.heading,
-                    level=node.level,
-                    content=node.content,
-                    position=position_counter[0],
-                )
-                position_counter[0] += 1
-                session.add(section)
-                await session.flush()  # Get the ID
-                count += 1
-
-                # Save children with this section as parent
-                for child in node.children:
-                    count += await save_tree(child, section.id)
-
-            return count
-
-        count = await save_tree(sections, None)
+        # Bulk insert all sections
+        session.add_all(sections)
         await session.commit()
-        logger.info(f"Saved {count} sections for document {document_id}")
-        return count
+
+        logger.info(f"Saved {len(sections)} sections for document {document_id}")
+        return len(sections)
 
 
 async def delete_sections_by_document(document_id: UUID) -> int:
