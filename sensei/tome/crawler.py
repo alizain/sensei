@@ -15,8 +15,11 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 from crawlee import ConcurrencySettings, Request
-from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
+from crawlee.crawlers import BasicCrawlingContext, HttpCrawler, HttpCrawlingContext
+from crawlee.errors import HttpStatusCodeError
 from crawlee.storage_clients import MemoryStorageClient
+from impit import TransportError
+from sqlalchemy.exc import IntegrityError
 
 from sensei.database.models import Section
 from sensei.database.storage import (
@@ -26,8 +29,8 @@ from sensei.database.storage import (
     insert_sections,
 )
 from sensei.tome.chunker import SectionData, chunk_markdown
-from sensei.tome.parser import extract_path, is_same_domain, parse_llms_txt_links
-from sensei.types import Domain, IngestResult, Success, TransientError
+from sensei.tome.parser import extract_path, is_same_site, parse_llms_txt_links
+from sensei.types import ContentTypeWarning, Domain, IngestResult, Success, TransientError
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +116,7 @@ def flatten_section_tree(
     return sections
 
 
-async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult]:
+async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResult]:
     """Ingest documentation from a domain's llms.txt file.
 
     Fetches /llms.txt from the domain, parses it to extract links, then crawls
@@ -126,11 +129,11 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
     4. Cleans up old (inactive) documents
 
     Args:
-        domain: The domain to crawl (e.g., "react.dev"). Can be a full URL -
+        domain: The domain to crawl (e.g., "llmstext.org"). Can be a full URL -
                 will be normalized automatically.
         max_depth: Maximum link depth to follow. 0 means only fetch llms.txt
                 (no linked documents). 1 means fetch llms.txt plus direct links.
-                Default is 3.
+                Default is 10.
 
     Returns:
         Success[IngestResult] with counts of documents processed
@@ -174,14 +177,14 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
         content_type = context.http_response.headers.get("content-type")
         if not is_markdown_content(content_type):
             logger.warning(f"Skipping non-markdown content type '{content_type}': {url}")
-            result.errors.append(f"Invalid content type '{content_type}': {url}")
+            result.warnings.append(ContentTypeWarning(url, content_type))
             return
 
         try:
             content = (await context.http_response.read()).decode("utf-8")
-        except UnicodeDecodeError:
-            logger.warning(f"Skipping non-text content: {url}")
-            result.errors.append(f"Non-text content: {url}")
+        except UnicodeDecodeError as e:
+            logger.error(f"Failed to decode content: {url}")
+            result.failures.append(e)
             return
 
         # Insert document for this generation (not yet visible to queries)
@@ -204,24 +207,73 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
         # Parse links and enqueue same-domain ones if within depth limit
         if current_depth < max_depth:
             all_links = parse_llms_txt_links(content, url)
-            same_domain_links = [link for link in all_links if is_same_domain(url, link)]
-            other_domain_links = [link for link in all_links if not is_same_domain(url, link)]
+            same_site_links = [link for link in all_links if is_same_site(url, link)]
+            other_site_links = [link for link in all_links if not is_same_site(url, link)]
 
             # Debug logging for link analysis
             logger.debug(f"=== Link analysis for {url} ===")
-            logger.debug(f"Same-domain links ({len(same_domain_links)}):")
-            for link in same_domain_links:
+            logger.debug(f"Same-site links ({len(same_site_links)}):")
+            for link in same_site_links:
                 logger.debug(f"  ✓ {link}")
-            logger.debug(f"Other-domain links ({len(other_domain_links)}):")
-            for link in other_domain_links:
+            logger.debug(f"Other-site links ({len(other_site_links)}):")
+            for link in other_site_links:
                 logger.debug(f"  ✗ {link}")
 
-            if same_domain_links:
-                logger.info(f"Found {len(all_links)} links, {len(same_domain_links)} same-domain, enqueueing")
-                requests = [
-                    Request.from_url(link, user_data={"depth": current_depth + 1}) for link in same_domain_links
-                ]
+            if same_site_links:
+                logger.info(f"Found {len(all_links)} links, {len(same_site_links)} same-site, enqueueing")
+                requests = [Request.from_url(link, user_data={"depth": current_depth + 1}) for link in same_site_links]
                 await context.add_requests(requests)
+
+    @crawler.error_handler
+    async def handle_error(context: BasicCrawlingContext, error: Exception) -> None:
+        """Prevent retries for deterministic errors.
+
+        For errors where retrying won't help:
+        - Set no_retry=True → skips retries, goes to failed_request_handler
+        - Raise → stops crawler entirely (only for data corruption risks)
+
+        Non-retryable errors:
+        - DNS errors: Domain doesn't exist, retrying won't resolve it
+        - IntegrityError: Database constraint violations (raises to stop crawler)
+        """
+        # Check the wrapped exception for RequestHandlerError
+        actual_error = error
+        if hasattr(error, "wrapped_exception"):
+            actual_error = error.wrapped_exception
+
+        # DNS errors are deterministic - no point retrying
+        if isinstance(actual_error, TransportError) and "dns error" in str(actual_error).lower():
+            logger.debug(f"DNS error (no retry): {context.request.url}")
+            context.request.no_retry = True
+            return  # Let it go to failed_request_handler
+
+        if isinstance(actual_error, IntegrityError):
+            logger.error(f"Non-retryable error, aborting: {context.request.url}: {actual_error}")
+            raise actual_error
+
+    @crawler.failed_request_handler
+    async def handle_failed_request(context: BasicCrawlingContext, error: Exception) -> None:
+        """Handle requests that failed after all retries.
+
+        Categorizes errors:
+        - 404 → warning (dead links are expected in documentation)
+        - DNS errors → warning (domain doesn't exist, common in docs)
+        - Other HTTP errors, network errors → failure (unexpected)
+        """
+        url = context.request.url
+
+        # 404s are expected (dead links in docs)
+        if isinstance(error, HttpStatusCodeError) and error.status_code == 404:
+            logger.warning(f"Dead link (404): {url}")
+            result.warnings.append(error)
+        # DNS errors are expected (domains disappear, typos in docs)
+        elif isinstance(error, TransportError) and "dns error" in str(error).lower():
+            logger.warning(f"DNS error (domain not found): {url}")
+            result.warnings.append(error)
+        else:
+            # All other errors are failures
+            logger.error(f"Request failed ({type(error).__name__}): {url} - {error}")
+            result.failures.append(error)
 
     # Start crawl with llms.txt (depth=0)
     try:
@@ -240,14 +292,15 @@ async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult
         deleted = await cleanup_old_generations(normalized_domain)
         logger.info(f"Cleaned up {deleted} old documents for {normalized_domain}")
     except Exception as e:
-        # Log but don't fail - cleanup is best-effort
-        logger.warning(f"Cleanup failed for {normalized_domain}: {e}")
-        result.errors.append(f"Cleanup failed: {e}")
+        # Cleanup failure is unexpected - record as failure
+        logger.error(f"Cleanup failed for {normalized_domain}: {e}")
+        result.failures.append(e)
 
     logger.info(
         f"Ingest complete for {normalized_domain}: "
         f"added={result.documents_added}, "
         f"generation={generation_id}, "
-        f"errors={len(result.errors)}"
+        f"warnings={len(result.warnings)}, "
+        f"failures={len(result.failures)}"
     )
     return Success(result)

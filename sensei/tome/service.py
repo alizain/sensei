@@ -30,7 +30,7 @@ async def tome_get(
     """Get document content from an ingested domain.
 
     Args:
-        domain: The domain to fetch from (e.g., "react.dev")
+        domain: The domain to fetch from (e.g., "llmstext.org")
         path: Document path, or sentinel value "INDEX" for /llms.txt.
               Any other path like "/hooks/useState"
         heading: Optional heading to get subtree for specific section
@@ -127,7 +127,7 @@ async def tome_search(
     """Search sections within an ingested domain using full-text search.
 
     Args:
-        domain: The domain to search (e.g., "react.dev")
+        domain: The domain to search (e.g., "llmstext.org")
         query: Natural language search query
         paths: Optional path prefixes to filter (e.g., ["/hooks"])
         limit: Maximum results to return
@@ -164,7 +164,7 @@ async def tome_toc(
     useful for navigation and understanding document structure.
 
     Args:
-        domain: The domain to fetch from (e.g., "react.dev")
+        domain: The domain to fetch from (e.g., "llmstext.org")
         path: Document path, or sentinel value INDEX for /llms.txt
 
     Returns:

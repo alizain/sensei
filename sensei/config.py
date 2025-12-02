@@ -1,7 +1,5 @@
 """Configuration management for Sensei using pydantic-settings."""
 
-import os
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -52,11 +50,11 @@ class Settings(BaseSettings):
     def is_external_database(self) -> bool:
         """Check if using an external (user-provided) database.
 
-        Returns True if DATABASE_URL env var was explicitly set.
+        Returns True if database_url differs from the local default.
         If external, sensei won't start PostgreSQL and won't run migrations
         (user is responsible for their own DB).
         """
-        return os.environ.get("DATABASE_URL") is not None
+        return self.database_url != get_local_database_url()
 
     # Server settings
     sensei_host: str = Field(

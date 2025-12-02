@@ -14,8 +14,8 @@ Usage as MCP server:
 Usage as library:
     from sensei.tome import ingest_domain, tome_get, tome_search
 
-    result = await ingest_domain("react.dev")
-    docs = await tome_search("react.dev", "useState")
+    result = await ingest_domain("llmstext.org")
+    docs = await tome_search("llmstext.org", "useState")
 """
 
 from sensei.tome.crawler import ingest_domain

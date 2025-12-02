@@ -1,12 +1,13 @@
 """Markdown chunker that preserves heading structure.
 
-Parses markdown documents into a tree structure based on headings,
-ensuring each leaf section fits within PostgreSQL's tsvector size limit.
+Parses markdown documents into a tree structure based on headings.
+PostgreSQL's tsvector limit is the constraint - if content is too large,
+the database will error and the crawler will skip that document.
 
 Algorithm (two-phase, no recursion for main tree building):
 1. Parse all headings once using markdown-it-py
 2. Build tree iteratively using stack-based approach
-3. Convert to SectionData and validate leaf sizes
+3. Convert to SectionData
 
 This avoids:
 - Re-parsing markdown at each nesting level
@@ -19,24 +20,12 @@ from dataclasses import dataclass, field
 
 from markdown_it import MarkdownIt
 
-from sensei.types import BrokenInvariant, SectionData
+from sensei.types import SectionData
 
 logger = logging.getLogger(__name__)
 
 # Singleton markdown parser
 _md = MarkdownIt()
-
-# Default max tokens - conservative estimate to stay well under 1MB tsvector limit
-DEFAULT_MAX_TOKENS = 1000
-
-
-def count_tokens(content: str) -> int:
-    """Estimate token count using word-based heuristic.
-
-    Uses whitespace splitting as approximation. Intentionally simple -
-    we have large margin in max_tokens so exact counts aren't needed.
-    """
-    return len(content.split())
 
 
 # =============================================================================
@@ -73,36 +62,27 @@ class _TreeNode:
 # =============================================================================
 
 
-def chunk_markdown(content: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> SectionData:
+def chunk_markdown(content: str) -> SectionData:
     """Build heading tree from markdown content.
 
     Args:
         content: Markdown content to chunk
-        max_tokens: Maximum tokens per leaf section
 
     Returns:
         Root SectionData with children representing the document structure
-
-    Raises:
-        BrokenInvariant: If a leaf section exceeds max_tokens
     """
     lines = content.split("\n")
     headings = _parse_headings(content)
 
     if not headings:
         # No headings - single root section
-        if count_tokens(content) > max_tokens:
-            raise BrokenInvariant(
-                f"Content exceeds {max_tokens} tokens with no heading boundaries. "
-                f"Content length: {count_tokens(content)} tokens"
-            )
         return SectionData(heading=None, level=0, content=content, children=[])
 
     # Build tree from headings (single pass, iterative)
     tree = _build_tree(lines, headings)
 
-    # Convert to SectionData and validate leaf sizes
-    return _to_section_data(tree, lines, max_tokens)
+    # Convert to SectionData
+    return _to_section_data(tree, lines)
 
 
 def reconstruct_content(section: SectionData) -> str:
@@ -224,12 +204,12 @@ def _build_tree(lines: list[str], headings: list[_HeadingInfo]) -> _TreeNode:
 
 
 # =============================================================================
-# Phase 3: Convert to SectionData and validate
+# Phase 3: Convert to SectionData
 # =============================================================================
 
 
-def _to_section_data(tree: _TreeNode, lines: list[str], max_tokens: int) -> SectionData:
-    """Convert TreeNode to SectionData, validating leaf sizes.
+def _to_section_data(tree: _TreeNode, lines: list[str]) -> SectionData:
+    """Convert TreeNode to SectionData.
 
     Uses bounded recursion (max depth = 6 for h1-h6), which is safe.
     The heavy lifting (tree building) is done iteratively in _build_tree.
@@ -237,12 +217,7 @@ def _to_section_data(tree: _TreeNode, lines: list[str], max_tokens: int) -> Sect
     content = "\n".join(lines[tree.start_line : tree.content_end])
 
     if not tree.children:
-        # Leaf node - validate size
-        if count_tokens(content) > max_tokens:
-            raise BrokenInvariant(
-                f"Section '{tree.heading}' exceeds {max_tokens} tokens with no "
-                f"heading boundaries. Content length: {count_tokens(content)} tokens"
-            )
+        # Leaf node
         return SectionData(
             heading=tree.heading,
             level=tree.level,
@@ -251,7 +226,7 @@ def _to_section_data(tree: _TreeNode, lines: list[str], max_tokens: int) -> Sect
         )
 
     # Branch node - convert children (recursion bounded by heading depth, max 6)
-    children = [_to_section_data(child, lines, max_tokens) for child in tree.children]
+    children = [_to_section_data(child, lines) for child in tree.children]
 
     return SectionData(
         heading=tree.heading,

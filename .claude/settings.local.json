@@ -41,7 +41,8 @@
 			"WebFetch(domain:marko-py.readthedocs.io)",
 			"WebFetch(domain:render.com)",
 			"WebFetch(domain:www.firecrawl.dev)",
-			"WebSearch"
+			"WebSearch",
+			"mcp__plugin_sensei_scout__glob"
 		],
 		"ask": [],
 		"deny": []

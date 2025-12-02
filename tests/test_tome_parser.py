@@ -4,7 +4,7 @@ from sensei.tome.crawler import is_markdown_content
 from sensei.tome.parser import (
     extract_domain,
     extract_path,
-    is_same_domain,
+    is_same_site,
     parse_llms_txt_links,
 )
 from sensei.types import Domain
@@ -120,22 +120,22 @@ def test_parse_llms_txt_links_deduplicates():
     ]
 
 
-def test_is_same_domain_returns_true_for_same_domain():
-    assert is_same_domain("https://example.com/llms.txt", "https://example.com/docs/install.md")
+def test_is_same_site_returns_true_for_same_site():
+    assert is_same_site("https://example.com/llms.txt", "https://example.com/docs/install.md")
 
 
-def test_is_same_domain_returns_false_for_different_domain():
-    assert not is_same_domain("https://example.com/llms.txt", "https://other.com/docs/")
+def test_is_same_site_returns_false_for_different_site():
+    assert not is_same_site("https://example.com/llms.txt", "https://other.com/docs/")
 
 
 def test_extract_domain():
-    assert extract_domain("https://react.dev/docs/hooks.md") == "react.dev"
-    # Subdomains resolve to registrable domain
-    assert extract_domain("https://api.example.com/v1/") == "example.com"
+    assert extract_domain("https://llmstext.org/docs/hooks.md") == "llmstext.org"
+    # Subdomains are preserved in .value
+    assert extract_domain("https://api.example.com/v1/") == "api.example.com"
 
 
 def test_extract_path():
-    assert extract_path("https://react.dev/docs/hooks.md") == "/docs/hooks.md"
+    assert extract_path("https://llmstext.org/docs/hooks.md") == "/docs/hooks.md"
     assert extract_path("https://example.com/") == "/"
 
 
@@ -144,23 +144,27 @@ def test_extract_path():
 # =============================================================================
 
 
-def test_domain_strips_www():
-    assert Domain("www.example.com").value == "example.com"
-    assert Domain("https://www.example.com/path").value == "example.com"
-
-
-def test_domain_resolves_subdomains_to_registrable():
-    """Subdomains should resolve to the registrable domain."""
-    assert Domain("api.example.com").value == "example.com"
-    assert Domain("docs.api.example.com").value == "example.com"
-    assert Domain("https://cdn.docs.example.com/file.js").value == "example.com"
+def test_domain_preserves_subdomains():
+    """Subdomains should be preserved in .value."""
+    assert Domain("www.example.com").value == "www.example.com"
+    assert Domain("api.example.com").value == "api.example.com"
+    assert Domain("docs.api.example.com").value == "docs.api.example.com"
+    assert Domain("https://cdn.docs.example.com/file.js").value == "cdn.docs.example.com"
 
 
 def test_domain_handles_country_code_tlds():
     """Country-code TLDs like .co.uk should be handled correctly."""
     assert Domain("bbc.co.uk").value == "bbc.co.uk"
-    assert Domain("forums.bbc.co.uk").value == "bbc.co.uk"
-    assert Domain("https://www.bbc.co.uk/news").value == "bbc.co.uk"
+    assert Domain("forums.bbc.co.uk").value == "forums.bbc.co.uk"
+    assert Domain("https://www.bbc.co.uk/news").value == "www.bbc.co.uk"
+
+
+def test_domain_registrable_domain_property():
+    """registrable_domain should return eTLD+1."""
+    assert Domain("example.com").registrable_domain == "example.com"
+    assert Domain("www.example.com").registrable_domain == "example.com"
+    assert Domain("api.docs.example.com").registrable_domain == "example.com"
+    assert Domain("forums.bbc.co.uk").registrable_domain == "bbc.co.uk"
 
 
 def test_domain_equality():
@@ -176,11 +180,11 @@ def test_domain_inequality():
     assert Domain("bbc.co.uk") != Domain("cnn.com")
 
 
-def test_is_same_domain_with_subdomains():
-    """is_same_domain should match subdomains of the same registrable domain."""
-    assert is_same_domain("https://example.com/", "https://api.example.com/docs")
-    assert is_same_domain("https://docs.example.com/", "https://www.example.com/")
-    assert is_same_domain("https://forums.bbc.co.uk/", "https://news.bbc.co.uk/")
+def test_is_same_site_with_subdomains():
+    """is_same_site should match subdomains of the same registrable domain."""
+    assert is_same_site("https://example.com/", "https://api.example.com/docs")
+    assert is_same_site("https://docs.example.com/", "https://www.example.com/")
+    assert is_same_site("https://forums.bbc.co.uk/", "https://news.bbc.co.uk/")
 
 
 # =============================================================================

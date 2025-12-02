@@ -1,11 +1,10 @@
 """Database operations for Sensei using SQLAlchemy with async PostgreSQL."""
 
 import logging
-from datetime import UTC, datetime
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import Integer, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from sensei.config import settings
@@ -47,6 +46,13 @@ def _get_session_factory():
 def AsyncSessionLocal():
     """Get a session from the lazy-initialized factory."""
     return _get_session_factory()()
+
+
+def _to_cache_hit(q: Query, age_days: int) -> CacheHit:
+    """Convert SQLAlchemy Query + computed age_days to CacheHit."""
+    data = {k: getattr(q, k) for k in CacheHit.model_fields if k != "age_days"}
+    data["age_days"] = age_days
+    return CacheHit(**data)
 
 
 async def save_query(
@@ -147,36 +153,21 @@ async def search_queries(
         return []
 
     async with AsyncSessionLocal() as session:
-        sql = """
-            SELECT id, query, library, version, inserted_at
-            FROM queries
-            WHERE query_tsvector @@ websearch_to_tsquery('english', :query)
-            ORDER BY ts_rank(query_tsvector, websearch_to_tsquery('english', :query)) DESC
-            LIMIT :limit
-        """
+        # Compute age_days in SQL: EXTRACT(DAY FROM NOW() - inserted_at)::int
+        age_days_expr = func.extract("day", func.now() - Query.inserted_at).cast(Integer).label("age_days")
+        tsquery = func.websearch_to_tsquery("english", query)
 
-        result = await session.execute(
-            text(sql),
-            {"query": query, "limit": limit},
+        stmt = (
+            select(Query, age_days_expr)
+            .where(Query.query_tsvector.op("@@")(tsquery))
+            .order_by(func.ts_rank(Query.query_tsvector, tsquery).desc())
+            .limit(limit)
         )
-        rows = result.fetchall()
 
-    # Transform to CacheHit objects
-    now = datetime.now(UTC)
-    hits = []
-    for row in rows:
-        query_id, query_text, lib, ver, inserted_at = row
-        age_days = (now - inserted_at).days if inserted_at else 0
-        hits.append(
-            CacheHit(
-                query_id=query_id,
-                query_truncated=query_text[:100] if query_text else "",
-                age_days=age_days,
-                library=lib,
-                version=ver,
-            )
-        )
-    return hits
+        result = await session.execute(stmt)
+        rows = result.all()
+
+    return [_to_cache_hit(q, age) for q, age in rows]
 
 
 async def insert_document(
@@ -195,7 +186,7 @@ async def insert_document(
     Call insert_sections() after this to save the content.
 
     Args:
-        domain: Source domain (e.g., 'react.dev')
+        domain: Source domain (e.g., 'llmstext.org')
         url: Full URL of the document
         path: Path portion of the URL
         content_hash: Hash for change detection (future optimization)

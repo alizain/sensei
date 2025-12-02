@@ -9,9 +9,11 @@ from sqlalchemy import (
     Computed,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
@@ -62,6 +64,8 @@ class Query(TimestampMixin, Base):
         nullable=True,
     )
 
+    __table_args__ = (Index("ix_queries_query_tsvector", "query_tsvector", postgresql_using="gin"),)
+
 
 class Rating(TimestampMixin, Base):
     """Stores user ratings for query responses (multi-dimensional)."""
@@ -103,8 +107,8 @@ class Document(TimestampMixin, Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
-    domain = Column(String, nullable=False, index=True)  # e.g. "react.dev"
-    url = Column(String, nullable=False, unique=True)  # Full URL
+    domain = Column(String, nullable=False, index=True)  # e.g. "llmstext.org"
+    url = Column(String, nullable=False, index=True)  # Full URL (unique per generation)
     path = Column(String, nullable=False)  # e.g. "/docs/hooks/useState.md"
     content_hash = Column(String, nullable=False)  # For change detection on upsert
     content_refreshed_at = Column(
@@ -113,6 +117,8 @@ class Document(TimestampMixin, Base):
     # Generation-based crawl visibility
     generation_id = Column(UUID(as_uuid=True), nullable=False)  # Groups docs from same crawl
     generation_active = Column(Boolean, nullable=False, server_default="false")  # Only active docs visible to queries
+
+    __table_args__ = (UniqueConstraint("url", "generation_id", name="documents_url_generation_key"),)
 
 
 class Section(TimestampMixin, Base):
@@ -154,3 +160,5 @@ class Section(TimestampMixin, Base):
         Computed("to_tsvector('english', content)", persisted=True),
         nullable=True,
     )
+
+    __table_args__ = (Index("ix_sections_content_tsvector", "content_tsvector", postgresql_using="gin"),)

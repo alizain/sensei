@@ -24,26 +24,26 @@ async def sample_docs(test_db):
 
     docs_data = [
         {
-            "domain": "react.dev",
-            "url": "https://react.dev/llms.txt",
+            "domain": "llmstext.org",
+            "url": "https://llmstext.org/llms.txt",
             "path": "/llms.txt",
             "content": "# React Documentation Index\n\n- [Hooks](/hooks)\n- [Components](/components)",
         },
         {
-            "domain": "react.dev",
-            "url": "https://react.dev/hooks/useState",
+            "domain": "llmstext.org",
+            "url": "https://llmstext.org/hooks/useState",
             "path": "/hooks/useState",
             "content": "# useState\n\nuseState is a React Hook that lets you add state to functional components.",
         },
         {
-            "domain": "react.dev",
-            "url": "https://react.dev/hooks/useEffect",
+            "domain": "llmstext.org",
+            "url": "https://llmstext.org/hooks/useEffect",
             "path": "/hooks/useEffect",
             "content": "# useEffect\n\nuseEffect is a React Hook for side effects and synchronization.",
         },
         {
-            "domain": "react.dev",
-            "url": "https://react.dev/components/button",
+            "domain": "llmstext.org",
+            "url": "https://llmstext.org/components/button",
             "path": "/components/button",
             "content": "# Button Component\n\nA reusable button component for React applications.",
         },
@@ -62,7 +62,7 @@ async def sample_docs(test_db):
         await storage.insert_sections(sections)
 
     # Activate the generation to make documents visible
-    await storage.activate_generation("react.dev", generation_id)
+    await storage.activate_generation("llmstext.org", generation_id)
 
     return docs_data
 
@@ -75,7 +75,7 @@ async def sample_docs(test_db):
 @pytest.mark.asyncio
 async def test_tome_get_index_sentinel(sample_docs):
     """Test INDEX sentinel returns /llms.txt content."""
-    result = await tome_get("react.dev", "INDEX")
+    result = await tome_get("llmstext.org", "INDEX")
     assert isinstance(result, Success)
     assert "React Documentation Index" in result.data
 
@@ -83,7 +83,7 @@ async def test_tome_get_index_sentinel(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_get_specific_path(sample_docs):
     """Test fetching a specific document path."""
-    result = await tome_get("react.dev", "/hooks/useState")
+    result = await tome_get("llmstext.org", "/hooks/useState")
     assert isinstance(result, Success)
     assert "useState" in result.data
     assert "React Hook" in result.data
@@ -92,7 +92,7 @@ async def test_tome_get_specific_path(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_get_path_without_slash(sample_docs):
     """Test that path without leading slash still works."""
-    result = await tome_get("react.dev", "hooks/useState")
+    result = await tome_get("llmstext.org", "hooks/useState")
     assert isinstance(result, Success)
     assert "useState" in result.data
 
@@ -100,7 +100,7 @@ async def test_tome_get_path_without_slash(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_get_not_found(sample_docs):
     """Test that missing document returns NoResults."""
-    result = await tome_get("react.dev", "/nonexistent")
+    result = await tome_get("llmstext.org", "/nonexistent")
     assert isinstance(result, NoResults)
 
 
@@ -119,7 +119,7 @@ async def test_tome_get_domain_not_ingested(test_db):
 @pytest.mark.asyncio
 async def test_tome_search_finds_matching_content(sample_docs):
     """Test basic FTS search finds matching documents."""
-    result = await tome_search("react.dev", "Hook")
+    result = await tome_search("llmstext.org", "Hook")
     assert isinstance(result, Success)
     # Should find useState and useEffect (both mention "Hook")
     assert len(result.data) >= 2
@@ -129,7 +129,7 @@ async def test_tome_search_finds_matching_content(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_search_with_path_filter(sample_docs):
     """Test search respects path prefix filter."""
-    result = await tome_search("react.dev", "React", paths=["/hooks"])
+    result = await tome_search("llmstext.org", "React", paths=["/hooks"])
     assert isinstance(result, Success)
     # Should only find docs under /hooks
     assert all("/hooks" in r.path for r in result.data)
@@ -138,7 +138,7 @@ async def test_tome_search_with_path_filter(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_search_empty_paths_searches_all(sample_docs):
     """Test empty paths list searches all documents."""
-    result = await tome_search("react.dev", "React", paths=[])
+    result = await tome_search("llmstext.org", "React", paths=[])
     assert isinstance(result, Success)
     # Should find multiple docs mentioning React
     assert len(result.data) >= 1
@@ -147,7 +147,7 @@ async def test_tome_search_empty_paths_searches_all(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_search_no_results(sample_docs):
     """Test search with no matches returns NoResults."""
-    result = await tome_search("react.dev", "nonexistentterm12345")
+    result = await tome_search("llmstext.org", "nonexistentterm12345")
     assert isinstance(result, NoResults)
 
 
@@ -155,20 +155,20 @@ async def test_tome_search_no_results(sample_docs):
 async def test_tome_search_empty_query_raises(sample_docs):
     """Test empty query raises ToolError."""
     with pytest.raises(ToolError):
-        await tome_search("react.dev", "")
+        await tome_search("llmstext.org", "")
 
 
 @pytest.mark.asyncio
 async def test_tome_search_whitespace_query_raises(sample_docs):
     """Test whitespace-only query raises ToolError."""
     with pytest.raises(ToolError):
-        await tome_search("react.dev", "   ")
+        await tome_search("llmstext.org", "   ")
 
 
 @pytest.mark.asyncio
 async def test_tome_search_returns_snippets(sample_docs):
     """Test search results include snippets."""
-    result = await tome_search("react.dev", "useState")
+    result = await tome_search("llmstext.org", "useState")
     assert isinstance(result, Success)
     assert len(result.data) >= 1
     # Snippets should contain some content
@@ -178,7 +178,7 @@ async def test_tome_search_returns_snippets(sample_docs):
 @pytest.mark.asyncio
 async def test_tome_search_respects_limit(sample_docs):
     """Test search respects limit parameter."""
-    result = await tome_search("react.dev", "React", limit=1)
+    result = await tome_search("llmstext.org", "React", limit=1)
     assert isinstance(result, Success)
     assert len(result.data) == 1
 

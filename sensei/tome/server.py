@@ -18,7 +18,7 @@ from pydantic import Field
 from sensei.tome.crawler import ingest_domain
 from sensei.tome.service import tome_get as _tome_get
 from sensei.tome.service import tome_search as _tome_search
-from sensei.types import NoResults, SearchResult, Success
+from sensei.types import IngestResult, NoResults, SearchResult, Success
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ tome = FastMCP(name="tome", lifespan=lifespan)
 
 @tome.tool
 async def get(
-    domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'react.dev')")],
+    domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'llmstext.org')")],
     path: Annotated[
         str,
         Field(description="Document path, or 'INDEX' for /llms.txt"),
@@ -63,8 +63,8 @@ async def get(
     Start with path="INDEX" to see the table of contents, then fetch specific docs.
 
     Examples:
-        - domain="react.dev", path="INDEX" - get the llms.txt table of contents
-        - domain="react.dev", path="/hooks/useState" - get a specific document
+        - domain="llmstext.org", path="INDEX" - get the llms.txt table of contents
+        - domain="llmstext.org", path="/hooks/useState" - get a specific document
     """
     match await _tome_get(domain, path):
         case Success(content):
@@ -75,7 +75,7 @@ async def get(
 
 @tome.tool
 async def search(
-    domain: Annotated[str, Field(description="Domain to search (e.g., 'react.dev')")],
+    domain: Annotated[str, Field(description="Domain to search (e.g., 'llmstext.org')")],
     query: Annotated[str, Field(description="Natural language search query")],
     paths: Annotated[
         list[str],
@@ -89,8 +89,8 @@ async def search(
     snippets with highlighted search terms and relevance ranking.
 
     Examples:
-        - domain="react.dev", query="useState" - search all docs for useState
-        - domain="react.dev", query="state management", paths=["/hooks"] - search only hooks docs
+        - domain="llmstext.org", query="useState" - search all docs for useState
+        - domain="llmstext.org", query="state management", paths=["/hooks"] - search only hooks docs
     """
     match await _tome_search(domain, query, paths or None, limit):
         case Success(results):
@@ -103,7 +103,7 @@ async def search(
 async def ingest(
     domain: Annotated[
         str,
-        Field(description="Domain to ingest (e.g., 'react.dev')"),
+        Field(description="Domain to ingest (e.g., 'llmstext.org')"),
     ],
     max_depth: Annotated[
         int,
@@ -118,17 +118,46 @@ async def ingest(
     Use this before searching a domain for the first time.
 
     Examples:
-        - domain="react.dev" - ingest React documentation
+        - domain="llmstext.org" - ingest React documentation
         - domain="fastapi.tiangolo.com", max_depth=1 - shallow crawl
     """
     match await ingest_domain(domain, max_depth):
         case Success(result):
-            return (
-                f"Ingested {result.domain}: "
-                f"{result.documents_added} added, "
-                f"{result.documents_updated} updated, "
-                f"{result.documents_skipped} unchanged" + (f", {len(result.errors)} errors" if result.errors else "")
-            )
+            return _format_ingest_result(result)
+
+
+def _format_exception(e: Exception) -> str:
+    """Format an exception for display, showing type and message."""
+    return f"{type(e).__name__}: {e}"
+
+
+def _format_ingest_result(result: IngestResult) -> str:
+    """Format ingest result based on success/failure status.
+
+    Any failures = overall failure, regardless of documents added.
+    Zero documents with only warnings = failure (nothing useful ingested).
+    """
+    # Any failures = FAILURE
+    if result.failures:
+        failure_msgs = [_format_exception(e) for e in result.failures[:3]]
+        failure_summary = "; ".join(failure_msgs)
+        if len(result.failures) > 3:
+            failure_summary += f" (+{len(result.failures) - 3} more)"
+        docs_note = f" Got {result.documents_added} documents." if result.documents_added > 0 else ""
+        return f"FAILED: {result.domain} - {failure_summary}{docs_note}"
+
+    # Zero documents (even with only warnings) = failure
+    if result.documents_added == 0:
+        if result.warnings:
+            return f"No documents found for {result.domain} ({len(result.warnings)} skipped)"
+        return f"No documents found for {result.domain}"
+
+    # Success with warnings
+    if result.warnings:
+        return f"Ingested {result.domain}: {result.documents_added} documents ({len(result.warnings)} skipped)"
+
+    # Clean success
+    return f"Ingested {result.domain}: {result.documents_added} documents"
 
 
 def _format_search_results(results: list[SearchResult]) -> str:

@@ -1,29 +1,9 @@
 """Tests for the markdown chunker."""
 
-import pytest
-
 from sensei.tome.chunker import (
     chunk_markdown,
-    count_tokens,
     reconstruct_content,
 )
-from sensei.types import BrokenInvariant
-
-
-class TestCountTokens:
-    """Tests for token counting."""
-
-    def test_count_empty(self):
-        assert count_tokens("") == 0
-
-    def test_count_single_word(self):
-        assert count_tokens("hello") == 1
-
-    def test_count_multiple_words(self):
-        assert count_tokens("hello world how are you") == 5
-
-    def test_count_with_newlines(self):
-        assert count_tokens("hello\nworld\ntest") == 3
 
 
 class TestHeadingParsing:
@@ -32,7 +12,7 @@ class TestHeadingParsing:
     def test_no_headings_returns_flat(self):
         """Content without headings returns single root section."""
         content = "Just some plain text without any headings."
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         assert result.heading is None
         assert result.content == content
         assert result.children == []
@@ -40,7 +20,7 @@ class TestHeadingParsing:
     def test_single_h2_heading(self):
         """Single heading creates one child section."""
         content = "## Getting Started\n\nSome content here."
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         assert len(result.children) == 1
         assert result.children[0].heading == "Getting Started"
         assert result.children[0].level == 2
@@ -55,7 +35,7 @@ Content for first.
 
 Content for second.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         assert len(result.children) == 2
         assert result.children[0].heading == "First Section"
         assert result.children[1].heading == "Second Section"
@@ -74,7 +54,7 @@ Details here.
 
 More content.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         # Two h2 sections at top level
         assert len(result.children) == 2
         assert result.children[0].heading == "Main Section"
@@ -90,7 +70,7 @@ class TestChunkMarkdown:
     def test_small_content_preserves_structure(self):
         """Small content should still preserve heading structure."""
         content = "# Small Document\n\nThis is small."
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
 
         # Root section with child for the h1
         assert result.heading is None
@@ -100,30 +80,13 @@ class TestChunkMarkdown:
         assert result.children[0].heading == "Small Document"
         assert result.children[0].level == 1
 
-    def test_large_content_splits_by_headings(self):
-        """Content over max_tokens should split at heading boundaries."""
-        # Create content with two small sections that individually fit
-        section1 = "## First\n\nword " * 10  # ~20 tokens
-        section2 = "## Second\n\nword " * 10  # ~20 tokens
-        content = section1 + "\n\n" + section2
-
-        # Set max_tokens so total exceeds but each section fits
-        result = chunk_markdown(content, max_tokens=30)
-
-        # Root should have children (split at top level)
-        assert result.heading is None
-        assert result.level == 0
-        assert len(result.children) == 2
-        assert result.children[0].heading == "First"
-        assert result.children[1].heading == "Second"
-
     def test_nested_headings_build_full_tree(self):
         """Nested headings build complete tree structure."""
         h3_1 = "### Sub One\n\n" + "word " * 10
         h3_2 = "### Sub Two\n\n" + "word " * 10
         h2_section = "## Big Section\n\nIntro.\n\n" + h3_1 + "\n\n" + h3_2
 
-        result = chunk_markdown(h2_section, max_tokens=1000)
+        result = chunk_markdown(h2_section)
 
         # Should have one h2 child that contains h3 children
         assert len(result.children) == 1
@@ -132,25 +95,6 @@ class TestChunkMarkdown:
         assert len(h2_child.children) == 2
         assert h2_child.children[0].heading == "Sub One"
         assert h2_child.children[1].heading == "Sub Two"
-
-    def test_raises_on_large_content_without_headings(self):
-        """Content too large with no headings should raise BrokenInvariant."""
-        content = "word " * 10000
-
-        with pytest.raises(BrokenInvariant) as excinfo:
-            chunk_markdown(content, max_tokens=100)
-
-        assert "no heading boundaries" in str(excinfo.value).lower()
-
-    def test_raises_on_large_leaf_section(self):
-        """Leaf section that exceeds max_tokens should raise BrokenInvariant."""
-        # Large content under a heading with no sub-headings
-        content = "## Big Section\n\n" + "word " * 1000
-
-        with pytest.raises(BrokenInvariant) as excinfo:
-            chunk_markdown(content, max_tokens=100)
-
-        assert "no heading boundaries" in str(excinfo.value).lower()
 
     def test_position_ordering_is_correct(self):
         """Verify sections are created in document order."""
@@ -166,7 +110,7 @@ Second content.
 
 Third content.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
 
         headings = [c.heading for c in result.children]
         assert headings == ["First", "Second", "Third"]
@@ -182,7 +126,7 @@ class TestSetextHeadings:
 
 Some content.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         assert len(result.children) == 1
         assert result.children[0].heading == "Title Here"
         assert result.children[0].level == 1
@@ -194,7 +138,7 @@ Some content.
 
 Some content.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         assert len(result.children) == 1
         assert result.children[0].heading == "Subtitle Here"
         assert result.children[0].level == 2
@@ -215,7 +159,7 @@ Another Section
 
 More content.
 """
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         # H1 (setext) is top level with h2 children
         assert len(result.children) == 1
         assert result.children[0].heading == "Main Title"
@@ -230,14 +174,14 @@ class TestRoundTrip:
     def test_small_content_round_trip(self):
         """Small content should round-trip exactly."""
         content = "# Small Document\n\nThis is small."
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
     def test_no_headings_round_trip(self):
         """Content without headings should round-trip."""
         content = "Just plain text without headings."
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -250,7 +194,7 @@ First content.
 ## Second
 
 Second content."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -267,7 +211,7 @@ Sub one content.
 ### Sub Two
 
 Sub two content."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -296,7 +240,7 @@ Second section content.
 ### Another Sub
 
 More content here."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -311,7 +255,7 @@ Sub Section
 -----------
 
 Sub content."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -324,7 +268,7 @@ Content here.
 ## Second
 
 More content."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -337,7 +281,7 @@ Line one.
 ## Section Two
 
 Line two."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content
 
@@ -348,6 +292,6 @@ Line two."""
 # First Heading
 
 Heading content."""
-        result = chunk_markdown(content, max_tokens=1000)
+        result = chunk_markdown(content)
         reconstructed = reconstruct_content(result)
         assert reconstructed == content

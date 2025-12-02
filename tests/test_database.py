@@ -133,8 +133,8 @@ async def test_insert_document(test_db):
     """Test inserting a new document with generation."""
     generation_id = uuid4()
     doc_id = await storage.insert_document(
-        domain="react.dev",
-        url="https://react.dev/docs/hooks/useState",
+        domain="llmstext.org",
+        url="https://llmstext.org/docs/hooks/useState",
         path="/docs/hooks/useState",
         content_hash=_hash("content"),
         generation_id=generation_id,
@@ -143,13 +143,13 @@ async def test_insert_document(test_db):
     assert doc_id is not None
 
     # Document is not yet active - get_document_by_url with active_only=True should return None
-    doc = await storage.get_document_by_url("https://react.dev/docs/hooks/useState", active_only=True)
+    doc = await storage.get_document_by_url("https://llmstext.org/docs/hooks/useState", active_only=True)
     assert doc is None
 
     # But with active_only=False it should exist
-    doc = await storage.get_document_by_url("https://react.dev/docs/hooks/useState", active_only=False)
+    doc = await storage.get_document_by_url("https://llmstext.org/docs/hooks/useState", active_only=False)
     assert doc is not None
-    assert doc.domain == "react.dev"
+    assert doc.domain == "llmstext.org"
     assert doc.path == "/docs/hooks/useState"
     assert doc.generation_id == generation_id
     assert doc.generation_active is False
@@ -269,13 +269,13 @@ async def test_save_and_get_sections(test_db):
     # Create and activate document
     generation_id = uuid4()
     doc_id = await storage.insert_document(
-        domain="react.dev",
-        url="https://react.dev/hooks",
+        domain="llmstext.org",
+        url="https://llmstext.org/hooks",
         path="/hooks",
         content_hash=_hash("hooks"),
         generation_id=generation_id,
     )
-    await storage.activate_generation("react.dev", generation_id)
+    await storage.activate_generation("llmstext.org", generation_id)
 
     # Create sections with hierarchy
     section_tree = SectionData(
@@ -304,7 +304,7 @@ async def test_save_and_get_sections(test_db):
     assert count == 3  # Root + 2 children
 
     # Retrieve sections (only works for active documents)
-    retrieved = await storage.get_sections_by_document("react.dev", "/hooks")
+    retrieved = await storage.get_sections_by_document("llmstext.org", "/hooks")
     assert len(retrieved) == 3
 
     # Verify order (by position)
@@ -319,13 +319,13 @@ async def test_search_sections_fts(test_db):
     # Create and activate document with sections
     generation_id = uuid4()
     doc_id = await storage.insert_document(
-        domain="react.dev",
-        url="https://react.dev/hooks",
+        domain="llmstext.org",
+        url="https://llmstext.org/hooks",
         path="/hooks",
         content_hash=_hash("hooks"),
         generation_id=generation_id,
     )
-    await storage.activate_generation("react.dev", generation_id)
+    await storage.activate_generation("llmstext.org", generation_id)
 
     section_tree = SectionData(
         heading=None,
@@ -350,22 +350,22 @@ async def test_search_sections_fts(test_db):
     await storage.insert_sections(sections)
 
     # Search for "Hook"
-    results = await storage.search_sections_fts("react.dev", "Hook")
+    results = await storage.search_sections_fts("llmstext.org", "Hook")
     assert len(results) >= 1
     # Results should be SearchResult objects
     result = results[0]
-    assert result.url == "https://react.dev/hooks"
+    assert result.url == "https://llmstext.org/hooks"
     assert result.path == "/hooks"
     assert isinstance(result.snippet, str)
     assert isinstance(result.rank, float)
     assert isinstance(result.heading_path, str)
 
     # Search with no matches
-    results = await storage.search_sections_fts("react.dev", "nonexistent")
+    results = await storage.search_sections_fts("llmstext.org", "nonexistent")
     assert len(results) == 0
 
     # Empty query returns empty
-    results = await storage.search_sections_fts("react.dev", "")
+    results = await storage.search_sections_fts("llmstext.org", "")
     assert len(results) == 0
 
 
@@ -404,15 +404,15 @@ async def test_delete_documents_by_domain(test_db):
 
     # Insert documents for multiple domains
     await storage.insert_document(
-        domain="react.dev",
-        url="https://react.dev/doc1",
+        domain="llmstext.org",
+        url="https://llmstext.org/doc1",
         path="/doc1",
         content_hash=_hash("r1"),
         generation_id=gen1,
     )
     await storage.insert_document(
-        domain="react.dev",
-        url="https://react.dev/doc2",
+        domain="llmstext.org",
+        url="https://llmstext.org/doc2",
         path="/doc2",
         content_hash=_hash("r2"),
         generation_id=gen1,
@@ -425,13 +425,13 @@ async def test_delete_documents_by_domain(test_db):
         generation_id=gen2,
     )
 
-    # Delete react.dev documents
-    count = await storage.delete_documents_by_domain("react.dev")
+    # Delete llmstext.org documents
+    count = await storage.delete_documents_by_domain("llmstext.org")
     assert count == 2
 
-    # Verify react.dev docs are gone
-    doc1 = await storage.get_document_by_url("https://react.dev/doc1", active_only=False)
-    doc2 = await storage.get_document_by_url("https://react.dev/doc2", active_only=False)
+    # Verify llmstext.org docs are gone
+    doc1 = await storage.get_document_by_url("https://llmstext.org/doc1", active_only=False)
+    doc2 = await storage.get_document_by_url("https://llmstext.org/doc2", active_only=False)
     assert doc1 is None
     assert doc2 is None
 

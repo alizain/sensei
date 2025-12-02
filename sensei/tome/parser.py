@@ -78,20 +78,21 @@ def _extract_urls_from_tokens(tokens: list[Token]) -> list[str]:
     return urls
 
 
-def is_same_domain(base_url: str, target_url: str) -> bool:
-    """Check if target_url is on the same domain as base_url.
+def is_same_site(base_url: str, target_url: str) -> bool:
+    """Check if target_url is on the same site as base_url.
 
-    Uses Domain value object for normalization:
-    - www.example.com == example.com
-    - example.com:443 == example.com
-    - EXAMPLE.COM == example.com
+    Uses registrable domain (eTLD+1) for comparison, allowing links across
+    subdomains of the same organization:
+    - fastcore.fast.ai == docs.fast.ai (same site)
+    - www.example.com == example.com (same site)
+    - example.com != other.com (different sites)
 
     Args:
         base_url: The reference URL (e.g., llms.txt location)
         target_url: The URL to check
 
     Returns:
-        True if both URLs share the same normalized domain
+        True if both URLs share the same registrable domain
     """
     return Domain.from_url(base_url) == Domain.from_url(target_url)
 
@@ -115,6 +116,6 @@ def extract_domain(url: str) -> str:
         url: Full URL
 
     Returns:
-        Normalized domain (e.g., "react.dev")
+        Normalized domain (e.g., "llmstext.org")
     """
     return Domain.from_url(url).value

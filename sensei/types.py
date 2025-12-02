@@ -8,11 +8,12 @@ This module contains:
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Generic, TypeVar
 from uuid import UUID
 
 import tldextract
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # =============================================================================
 # Exceptions
@@ -44,6 +45,23 @@ class ToolError(SenseiError):
 
 
 # =============================================================================
+# Crawler Warnings (expected skips, not errors)
+# =============================================================================
+
+
+class ContentTypeWarning(Exception):
+    """Document skipped due to wrong content-type (e.g., HTML instead of markdown).
+
+    This is expected behavior - llms.txt files often link to non-markdown pages.
+    """
+
+    def __init__(self, url: str, content_type: str | None) -> None:
+        self.url = url
+        self.content_type = content_type
+        super().__init__(f"Wrong content-type '{content_type}': {url}")
+
+
+# =============================================================================
 # Result Types
 # =============================================================================
 
@@ -69,36 +87,51 @@ class NoResults:
 # =============================================================================
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Domain:
-    """Normalized domain value object using public suffix resolution.
+    """Domain value object preserving subdomains, comparing by registrable domain.
 
-    Extracts the registrable domain (domain + public suffix) from any URL
-    or domain string. Uses the Public Suffix List for accurate extraction.
+    Stores the full hostname (subdomains preserved) but compares using the
+    registrable domain (eTLD+1) for "same-site" semantics.
 
     Examples:
-        Domain("https://www.example.com/path") -> Domain("example.com")
-        Domain("api.docs.example.com") -> Domain("example.com")
-        Domain("forums.bbc.co.uk") -> Domain("bbc.co.uk")
-        Domain("react.dev") -> Domain("react.dev")
+        Domain("fastcore.fast.ai").value -> "fastcore.fast.ai"
+        Domain("www.example.com").value -> "www.example.com"
+        Domain("fastcore.fast.ai") == Domain("docs.fast.ai") -> True (same site)
+        Domain("example.com") == Domain("other.com") -> False
     """
 
     value: str
 
     def __post_init__(self) -> None:
-        normalized = self._normalize(self.value)
+        normalized = self._extract_hostname(self.value)
         object.__setattr__(self, "value", normalized)
 
     @staticmethod
-    def _normalize(raw: str) -> str:
-        # tldextract handles URLs, domains, and edge cases
+    def _extract_hostname(raw: str) -> str:
+        """Extract and lowercase the full hostname (preserving subdomains)."""
         extracted = tldextract.extract(raw)
-        # top_domain_under_public_suffix gives us "domain.suffix" (e.g., "bbc.co.uk")
+        # Reconstruct full hostname: subdomain.domain.suffix
+        parts = [p for p in [extracted.subdomain, extracted.domain, extracted.suffix] if p]
+        if parts:
+            return ".".join(parts).lower()
+        # Fallback for invalid input
+        return raw.lower()
+
+    @property
+    def registrable_domain(self) -> str:
+        """The registrable domain (eTLD+1) for same-site comparison."""
+        extracted = tldextract.extract(self.value)
         registrable = extracted.top_domain_under_public_suffix
-        if registrable:
-            return registrable.lower()
-        # Fallback for invalid/localhost domains
-        return (extracted.domain or raw).lower()
+        return registrable.lower() if registrable else self.value
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Domain):
+            return NotImplemented
+        return self.registrable_domain == other.registrable_domain
+
+    def __hash__(self) -> int:
+        return hash(self.registrable_domain)
 
     def __str__(self) -> str:
         return self.value
@@ -135,13 +168,27 @@ class Rating(BaseModel):
 
 
 class CacheHit(BaseModel):
-    """A cache search result summary."""
+    """Cached query with computed age for API responses.
 
-    query_id: UUID
-    query_truncated: str = Field(..., description="First 100 chars of query")
-    age_days: int
+    Mirrors Query model fields plus computed age_days.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    # Query model fields
+    id: UUID
+    query: str
+    language: str | None = None
     library: str | None = None
     version: str | None = None
+    output: str
+    messages: str | None = None
+    parent_id: UUID | None = None
+    inserted_at: datetime
+    updated_at: datetime
+
+    # Computed field
+    age_days: int
 
 
 class SubSenseiResult(BaseModel):
@@ -160,7 +207,7 @@ class DocumentContent(BaseModel):
     Keeps the domain model as single source of truth.
     """
 
-    domain: str = Field(..., description="Source domain (e.g., 'react.dev')")
+    domain: str = Field(..., description="Source domain (e.g., 'llmstext.org')")
     url: str = Field(..., description="Full URL of the document")
     path: str = Field(..., description="Path portion of the URL")
     content: str = Field(..., description="Markdown content")
@@ -174,11 +221,20 @@ class IngestResult(BaseModel):
     Returned by the tome crawler after crawling a domain's llms.txt
     and its linked documents. Uses generation-based crawling where
     all documents are inserted fresh each crawl.
+
+    Error categorization:
+    - warnings: Expected skips (wrong content-type, 404 dead links)
+    - failures: Unexpected errors (DNS, timeout, 5xx, decode errors)
+
+    Any non-empty failures list = overall crawl failure.
     """
+
+    model_config = {"arbitrary_types_allowed": True}
 
     domain: str = Field(..., description="The domain that was crawled")
     documents_added: int = Field(default=0, ge=0, description="Number of documents added in this generation")
-    errors: list[str] = Field(default_factory=list, description="Errors encountered during crawl")
+    warnings: list[Exception] = Field(default_factory=list, description="Expected skips (wrong content-type, 404s)")
+    failures: list[Exception] = Field(default_factory=list, description="Unexpected errors (network, 5xx, decode)")
 
 
 class SearchResult(BaseModel):
