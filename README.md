@@ -37,6 +37,31 @@ Just ask your AI assistant to use Sensei when you need documentation:
 
 Sensei works best for library documentation, API references, framework guides, and "how do I do X with Y" questions.
 
+## Prerequisites
+
+### PostgreSQL 17+
+
+Sensei requires PostgreSQL to be installed on your system. Install it using your package manager:
+
+**macOS:**
+```bash
+brew install postgresql@17
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install postgresql-17
+```
+
+**Windows:**
+Download from https://www.postgresql.org/download/windows/
+
+**Note:** You don't need to configure PostgreSQL or create databases manually. Sensei automatically manages a local PostgreSQL instance in `~/.sensei/pgdata/` using a Unix socket (no port conflicts with system PostgreSQL).
+
+## Development Setup
+
+Set `SENSEI_HOME=.sensei` in your `.env` file to keep development data local to the repo instead of `~/.sensei/`.
+
 ## License
 
 MIT

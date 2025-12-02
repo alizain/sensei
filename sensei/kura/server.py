@@ -9,6 +9,7 @@ This is the edge layer that:
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
@@ -22,11 +23,26 @@ from .tools import search_cache as _search_cache
 
 logger = logging.getLogger(__name__)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lifespan
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@asynccontextmanager
+async def lifespan(server):
+    """Ensure database is ready before handling requests."""
+    from sensei.database.local import ensure_db_ready
+
+    await ensure_db_ready()
+    yield
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # FastMCP Server
 # ─────────────────────────────────────────────────────────────────────────────
 
-kura = FastMCP(name="kura")
+kura = FastMCP(name="kura", lifespan=lifespan)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

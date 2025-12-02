@@ -28,7 +28,12 @@ tome_mcp_app = tome.http_app(path="/tome/mcp", stateless_http=True)
 
 @asynccontextmanager
 async def combined_lifespan(app: FastAPI):
-    """Combined lifespan: MCP session managers."""
+    """Combined lifespan: database init + MCP session managers."""
+    # Ensure database is ready first (idempotent - individual service lifespans will no-op)
+    from sensei.database.local import ensure_db_ready
+
+    await ensure_db_ready()
+
     async with mcp_app.lifespan(app):
         async with scout_mcp_app.lifespan(app):
             async with kura_mcp_app.lifespan(app):

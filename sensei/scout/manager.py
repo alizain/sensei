@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
+from sensei.paths import get_scout_repos
 from sensei.types import ToolError, TransientError
 
 from .models import RepoMeta, RepoRef
@@ -38,7 +39,7 @@ class RepoManager:
             cache_dir: Directory for cached repos. Defaults to current directory
             branch_max_age: How long before branches are considered stale
         """
-        self.cache_dir = cache_dir or Path(".") / ".scout" / "repos"
+        self.cache_dir = cache_dir or get_scout_repos()
         self.branch_max_age = branch_max_age
         self._locks: dict[str, asyncio.Lock] = {}
 

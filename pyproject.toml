@@ -41,6 +41,7 @@ Repository = "https://github.com/alizain/sensei"
 [project.scripts]
 scout = "sensei.scout:scout.run"
 kura = "sensei.kura:kura.run"
+tome = "sensei.tome:tome.run"
 
 [project.optional-dependencies]
 dev = [
@@ -50,6 +51,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["sensei*"]
+
+[tool.setuptools.package-data]
+sensei = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
 
 [tool.ruff]
 line-length = 120
