@@ -16,6 +16,7 @@ from uuid import UUID
 from fastmcp import FastMCP
 from pydantic import Field
 
+from sensei.cli import run_server
 from sensei.types import NoResults, Success
 
 from .tools import get_cached_response as _get_cached_response
@@ -92,3 +93,13 @@ async def get(
             return result
         case NoResults():
             return f"No cached query found with ID '{query_id}'"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry Point
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def main():
+    """Entry point for `uv run kura` or `python -m sensei.kura`."""
+    run_server(kura, "kura", "Kura knowledge cache MCP server")

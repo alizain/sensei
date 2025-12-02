@@ -19,12 +19,13 @@ Usage as library:
     response = await get_cached_response("query-123")
 """
 
-from .server import kura
+from .server import kura, main
 from .tools import get_cached_response, search_cache
 
 __all__ = [
     # Server
     "kura",
+    "main",
     # Tools
     "search_cache",
     "get_cached_response",

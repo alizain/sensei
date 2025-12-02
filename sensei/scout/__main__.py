@@ -1,6 +1,6 @@
-"""Entry point for `uvx --from sensei scout` or `python -m sensei.scout`."""
+"""Enable `python -m sensei.scout`."""
 
-from .server import scout
+from .server import main
 
 if __name__ == "__main__":
-    scout.run()
+    main()

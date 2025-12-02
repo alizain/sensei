@@ -15,6 +15,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
+from sensei.cli import run_server
 from sensei.database import storage
 from sensei.tome.crawler import ingest_domain
 from sensei.tome.service import tome_get as _tome_get
@@ -166,3 +167,13 @@ def _format_search_results(results: list[SearchResult]) -> str:
         lines.append(f"\n{r.snippet}\n")
 
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry Point
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def main():
+    """Entry point for `uv run tome` or `python -m sensei.tome`."""
+    run_server(tome, "tome", "Tome documentation MCP server")

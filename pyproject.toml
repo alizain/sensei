@@ -40,9 +40,9 @@ Repository = "https://github.com/alizain/sensei"
 
 [project.scripts]
 sensei = "sensei.__main__:run"
-scout = "sensei.scout:scout.run"
-kura = "sensei.kura:kura.run"
-tome = "sensei.tome:tome.run"
+scout = "sensei.scout:main"
+kura = "sensei.kura:main"
+tome = "sensei.tome:main"
 
 [project.optional-dependencies]
 dev = [

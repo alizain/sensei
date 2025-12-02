@@ -19,12 +19,13 @@ Usage as library:
 """
 
 from sensei.tome.crawler import ingest_domain
-from sensei.tome.server import tome
+from sensei.tome.server import main, tome
 from sensei.tome.service import tome_get, tome_search
 
 __all__ = [
     # Server
     "tome",
+    "main",
     # Service
     "ingest_domain",
     "tome_get",

@@ -15,6 +15,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
+from sensei.cli import run_server
 from sensei.types import NoResults, Success
 
 from .manager import with_repo
@@ -227,3 +228,13 @@ async def tree(
                 return result.output
             case NoResults():
                 return "Empty directory"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry Point
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def main():
+    """Entry point for `uv run scout` or `python -m sensei.scout`."""
+    run_server(scout, "scout", "Scout GitHub repo explorer MCP server")

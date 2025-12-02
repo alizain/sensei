@@ -1,6 +1,6 @@
-"""Entry point for `uvx --from sensei kura` or `python -m sensei.kura`."""
+"""Enable `python -m sensei.kura`."""
 
-from .server import kura
+from .server import main
 
 if __name__ == "__main__":
-    kura.run()
+    main()

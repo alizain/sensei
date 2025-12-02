@@ -41,11 +41,12 @@ from .operations import (
 # DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
 # from .repomap import RepoMapWrapper, generate_repo_map
 
-from .server import scout
+from .server import main, scout
 
 __all__ = [
     # Server
     "scout",
+    "main",
     # Manager
     "RepoManager",
     "get_manager",
