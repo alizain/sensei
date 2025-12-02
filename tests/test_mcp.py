@@ -46,14 +46,18 @@ async def test_query_tool_success(mcp_client: Client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_query_tool_error(mcp_client: Client, monkeypatch):
+async def test_query_tool_error(mcp_client: Client, monkeypatch, caplog):
     """Test query tool call with error."""
+    import logging
+
     from sensei.types import TransientError
 
     monkeypatch.setattr("sensei.core.handle_query", AsyncMock(side_effect=TransientError("Agent failed")))
 
-    with pytest.raises(ToolError, match="Service temporarily unavailable"):
-        await mcp_client.call_tool("query", {"query": "test query"})
+    with caplog.at_level(logging.ERROR, logger="sensei.server.mcp"):
+        with pytest.raises(ToolError, match="Service temporarily unavailable"):
+            await mcp_client.call_tool("query", {"query": "test query"})
+        assert "Service temporarily unavailable" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -78,15 +82,19 @@ async def test_feedback_tool_success(mcp_client: Client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_feedback_tool_error(mcp_client: Client, monkeypatch):
+async def test_feedback_tool_error(mcp_client: Client, monkeypatch, caplog):
     """Test feedback tool call with error."""
+    import logging
+
     monkeypatch.setattr("sensei.core.handle_rating", AsyncMock(side_effect=Exception("Database error")))
 
-    with pytest.raises(ToolError, match="Failed to save rating"):
-        await mcp_client.call_tool(
-            "feedback",
-            {"query_id": "12345678-1234-5678-1234-567812345678", "correctness": 3, "relevance": 3, "usefulness": 3},
-        )
+    with caplog.at_level(logging.ERROR, logger="sensei.server.mcp"):
+        with pytest.raises(ToolError, match="Failed to save rating"):
+            await mcp_client.call_tool(
+                "feedback",
+                {"query_id": "12345678-1234-5678-1234-567812345678", "correctness": 3, "relevance": 3, "usefulness": 3},
+            )
+        assert "Failed to save rating" in caplog.text
 
 
 def test_server_name():

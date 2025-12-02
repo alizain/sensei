@@ -40,7 +40,8 @@
 			"WebFetch(domain:marko-py.readthedocs.io)",
 			"mcp__plugin_sensei_scout__read",
 			"mcp__plugin_sensei_scout__grep",
-			"mcp__beads__blocked"
+			"mcp__beads__blocked",
+			"Bash(bd list:*)"
 		],
 		"ask": [],
 		"deny": []
