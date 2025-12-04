@@ -6,10 +6,10 @@ Tome provides MCP tools to ingest and search llms.txt documentation:
 - get: Retrieve a specific document by path
 
 Usage as MCP server:
-    from sensei.tome import tome
-    tome.run()  # stdio transport
+    from sensei.tome import mcp
+    mcp.run()  # stdio transport
     # or
-    app = tome.http_app(path="/tome")  # HTTP transport
+    app = mcp.http_app(path="/tome")  # HTTP transport
 
 Usage as library:
     from sensei.tome import ingest_domain, tome_get, tome_search
@@ -19,12 +19,12 @@ Usage as library:
 """
 
 from sensei.tome.crawler import ingest_domain
-from sensei.tome.server import main, tome
+from sensei.tome.server import main, mcp
 from sensei.tome.service import tome_get, tome_search
 
 __all__ = [
     # Server
-    "tome",
+    "mcp",
     "main",
     # Service
     "ingest_domain",

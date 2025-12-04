@@ -1,4 +1,4 @@
-"""Tests for the FastMCP server."""
+"""Tests for the core MCP server."""
 
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -8,13 +8,13 @@ import pytest_asyncio
 from fastmcp.client import Client
 from fastmcp.exceptions import ToolError
 
-from sensei.server.mcp import mcp
+from sensei.server import mcp as sensei_mcp
 from sensei.types import QueryResult
 
 
 @pytest_asyncio.fixture
 async def mcp_client():
-    async with Client(transport=mcp) as client:
+    async with Client(transport=sensei_mcp) as client:
         yield client
 
 
@@ -54,7 +54,7 @@ async def test_query_tool_error(mcp_client: Client, monkeypatch, caplog):
 
     monkeypatch.setattr("sensei.core.handle_query", AsyncMock(side_effect=TransientError("Agent failed")))
 
-    with caplog.at_level(logging.ERROR, logger="sensei.server.mcp"):
+    with caplog.at_level(logging.ERROR, logger="sensei.server"):
         with pytest.raises(ToolError, match="Service temporarily unavailable"):
             await mcp_client.call_tool("query", {"query": "test query"})
         assert "Service temporarily unavailable" in caplog.text
@@ -88,7 +88,7 @@ async def test_feedback_tool_error(mcp_client: Client, monkeypatch, caplog):
 
     monkeypatch.setattr("sensei.core.handle_rating", AsyncMock(side_effect=Exception("Database error")))
 
-    with caplog.at_level(logging.ERROR, logger="sensei.server.mcp"):
+    with caplog.at_level(logging.ERROR, logger="sensei.server"):
         with pytest.raises(ToolError, match="Failed to save rating"):
             await mcp_client.call_tool(
                 "feedback",
@@ -99,4 +99,4 @@ async def test_feedback_tool_error(mcp_client: Client, monkeypatch, caplog):
 
 def test_server_name():
     """Test that the MCP server has the correct name."""
-    assert mcp.name == "sensei"
+    assert sensei_mcp.name == "sensei-core"

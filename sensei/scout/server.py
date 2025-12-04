@@ -40,7 +40,7 @@ REPO_PATH_FIELD = Field(description="Subdirectory to map (defaults to repo root)
 # FastMCP Server
 # ─────────────────────────────────────────────────────────────────────────────
 
-scout = FastMCP(name="scout")
+mcp = FastMCP(name="scout")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ scout = FastMCP(name="scout")
 # 				return "No symbols found (no parseable source files)."
 
 
-@scout.tool
+@mcp.tool
 async def glob(
     url: Annotated[str, REPO_URL_FIELD],
     pattern: Annotated[str, Field(description="Glob pattern (e.g., '**/*.py', 'src/**/*.ts')")],
@@ -131,7 +131,7 @@ async def glob(
         return "\n".join(lines)
 
 
-@scout.tool
+@mcp.tool
 async def read(
     url: Annotated[str, REPO_URL_FIELD],
     paths: Annotated[list[str], Field(description="File path(s) relative to repo root")],
@@ -163,7 +163,7 @@ async def read(
         return "\n\n".join(output_parts)
 
 
-@scout.tool
+@mcp.tool
 async def grep(
     url: Annotated[str, REPO_URL_FIELD],
     pattern: Annotated[str, Field(description="Regex pattern to search for")],
@@ -194,7 +194,7 @@ async def grep(
                 return f"No matches for '{pattern}'"
 
 
-@scout.tool
+@mcp.tool
 async def tree(
     url: Annotated[str, REPO_URL_FIELD],
     ref: Annotated[str | None, REPO_REF_FIELD] = None,
@@ -237,4 +237,4 @@ async def tree(
 
 def main():
     """Entry point for `uv run scout` or `python -m sensei.scout`."""
-    run_server(scout, "scout", "Scout GitHub repo explorer MCP server")
+    run_server(mcp, "scout", "Scout GitHub repo explorer MCP server")

@@ -43,7 +43,7 @@ async def lifespan(server):
 # FastMCP Server
 # ─────────────────────────────────────────────────────────────────────────────
 
-kura = FastMCP(name="kura", lifespan=lifespan)
+mcp = FastMCP(name="kura", lifespan=lifespan)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ kura = FastMCP(name="kura", lifespan=lifespan)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@kura.tool
+@mcp.tool
 async def search(
     query: Annotated[str, Field(description="Keywords to search for in cached queries")],
     limit: Annotated[int, Field(description="Maximum number of results", ge=1, le=50)] = 10,
@@ -75,7 +75,7 @@ async def search(
             return f"No cached queries matching '{query}'"
 
 
-@kura.tool
+@mcp.tool
 async def get(
     query_id: Annotated[str, Field(description="The ID of the cached query to retrieve")],
 ) -> str:
@@ -102,4 +102,4 @@ async def get(
 
 def main():
     """Entry point for `uv run kura` or `python -m sensei.kura`."""
-    run_server(kura, "kura", "Kura knowledge cache MCP server")
+    run_server(mcp, "kura", "Kura knowledge cache MCP server")

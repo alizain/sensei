@@ -1,4 +1,12 @@
-"""MCP server implementation for Sensei using FastMCP."""
+"""Core MCP server for Sensei.
+
+Provides the main sensei tools:
+- query: Ask questions about libraries and frameworks
+- feedback: Rate responses to improve quality
+
+This server is mounted by the unified server in __main__.py with prefix "sensei",
+so tools are accessible as sensei_query, sensei_feedback.
+"""
 
 import logging
 from typing import Annotated
@@ -12,7 +20,7 @@ from sensei.types import BrokenInvariant, Rating, ToolError, TransientError
 
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP(name="sensei")
+mcp = FastMCP(name="sensei-core")
 
 
 @mcp.tool

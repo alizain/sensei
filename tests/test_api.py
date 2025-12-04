@@ -1,4 +1,4 @@
-"""Tests for the FastAPI server."""
+"""Tests for the REST API server."""
 
 import uuid
 from unittest.mock import AsyncMock, patch
@@ -13,9 +13,9 @@ from sensei.types import QueryResult
 def client():
     """Create a test client for the FastAPI app."""
     # Import after patches are set up
-    from sensei.server.api import api_app
+    from sensei.api import app
 
-    return TestClient(api_app)
+    return TestClient(app)
 
 
 def test_health_endpoint(client):
@@ -30,7 +30,7 @@ def test_health_endpoint(client):
 @pytest.mark.asyncio
 async def test_query_endpoint_success(client):
     """Test successful query endpoint."""
-    with patch("sensei.server.api.core.handle_query", new_callable=AsyncMock) as mock_handle:
+    with patch("sensei.api.core.handle_query", new_callable=AsyncMock) as mock_handle:
         mock_handle.return_value = QueryResult(
             query_id="11111111-1111-1111-1111-111111111111",
             markdown="# FastAPI Guide\n\nHere's how to use FastAPI...\n\n---\n**Help improve sensei:** Rate this response using `feedback` tool after trying it.\n\nQuery ID: `11111111-1111-1111-1111-111111111111`\n",
@@ -88,7 +88,7 @@ async def test_query_endpoint_agent_error(client):
     """Test query endpoint when agent raises an error."""
     from sensei.types import ToolError as SenseiToolError
 
-    with patch("sensei.server.api.core.handle_query", new_callable=AsyncMock) as mock_handle:
+    with patch("sensei.api.core.handle_query", new_callable=AsyncMock) as mock_handle:
         mock_handle.side_effect = SenseiToolError("Agent failed")
 
         response = client.post(
@@ -104,7 +104,7 @@ async def test_query_endpoint_agent_error(client):
 @pytest.mark.asyncio
 async def test_rate_endpoint_success(client):
     """Test successful rating endpoint."""
-    with patch("sensei.server.api.core.handle_rating", new_callable=AsyncMock) as mock_handle:
+    with patch("sensei.api.core.handle_rating", new_callable=AsyncMock) as mock_handle:
         response = client.post(
             "/rate",
             json={
@@ -130,7 +130,7 @@ async def test_rate_endpoint_success(client):
 @pytest.mark.asyncio
 async def test_rate_endpoint_without_feedback(client):
     """Test rating endpoint without optional feedback."""
-    with patch("sensei.server.api.core.handle_rating", new_callable=AsyncMock) as mock_handle:
+    with patch("sensei.api.core.handle_rating", new_callable=AsyncMock) as mock_handle:
         response = client.post(
             "/rate",
             json={

@@ -20,7 +20,7 @@ from sensei.database import storage
 from sensei.tome.crawler import ingest_domain
 from sensei.tome.service import tome_get as _tome_get
 from sensei.tome.service import tome_search as _tome_search
-from sensei.types import NoResults, SearchResult, Success
+from sensei.types import NoLLMsTxt, NoResults, SearchResult, Success
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ async def lifespan(server):
 # FastMCP Server
 # ─────────────────────────────────────────────────────────────────────────────
 
-tome = FastMCP(name="tome", lifespan=lifespan)
+mcp = FastMCP(name="tome", lifespan=lifespan)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +68,8 @@ async def _ensure_domain_ingested(domain: str) -> str | None:
 
     logger.info(f"Auto-ingesting unknown domain: {domain}")
     match await ingest_domain(domain):
+        case NoLLMsTxt(domain=d):
+            return f"{d} does not have an /llms.txt file"
         case Success(result) if result.failures:
             # Ingest had failures - return detailed error
             failure_msg = _format_exception(result.failures[0])
@@ -86,7 +88,7 @@ async def _ensure_domain_ingested(domain: str) -> str | None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@tome.tool
+@mcp.tool
 async def get(
     domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'react.dev')")],
     path: Annotated[
@@ -114,7 +116,7 @@ async def get(
             return f"Document not found: {domain}{path if path.startswith('/') else '/' + path}"
 
 
-@tome.tool
+@mcp.tool
 async def search(
     domain: Annotated[str, Field(description="Domain to search (e.g., 'react.dev')")],
     query: Annotated[str, Field(description="Natural language search query")],
@@ -176,4 +178,4 @@ def _format_search_results(results: list[SearchResult]) -> str:
 
 def main():
     """Entry point for `uv run tome` or `python -m sensei.tome`."""
-    run_server(tome, "tome", "Tome documentation MCP server")
+    run_server(mcp, "tome", "Tome documentation MCP server")

@@ -5,6 +5,22 @@ This module contains:
 - Result types for tool return values
 - Domain models shared across layers
 - Value objects for normalization
+
+# Dataclass vs Pydantic: Layer-Appropriate Types
+#
+# We use BOTH deliberately based on where the type lives:
+#
+# DATACLASSES (core/internal layer):
+#   - Result types (Success[T], NoResults) - pattern matching, generics, lightweight
+#   - Value objects (Domain) - custom __eq__/__hash__ for domain semantics
+#   - Algorithm intermediates (SectionData, TOCEntry) - never serialized, bulk creation
+#
+# PYDANTIC MODELS (edge/boundary layer):
+#   - API responses (QueryResult, CacheHit) - JSON serialization, Field descriptions
+#   - Validated inputs (Rating, DocumentContent) - Field constraints (ge=, le=)
+#   - Storage models - ORM integration via ConfigDict(from_attributes=True)
+#
+# Rule: Crosses system boundary (API, MCP, storage)? → Pydantic. Internal? → Dataclass.
 """
 
 from dataclasses import dataclass
@@ -61,6 +77,14 @@ class ContentTypeWarning(Exception):
         super().__init__(f"Wrong content-type '{content_type}': {url}")
 
 
+class NotFoundWarning(Exception):
+    """Document returned 404 - expected for dead links in documentation."""
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        super().__init__(f"Not found (404): {url}")
+
+
 # =============================================================================
 # Result Types
 # =============================================================================
@@ -80,6 +104,13 @@ class NoResults:
     """Tool executed successfully but found no results."""
 
     pass
+
+
+@dataclass
+class NoLLMsTxt:
+    """Domain does not have an /llms.txt file."""
+
+    domain: str
 
 
 # =============================================================================

@@ -30,7 +30,15 @@ from sensei.database.storage import (
 )
 from sensei.tome.chunker import SectionData, chunk_markdown
 from sensei.tome.parser import extract_path, is_same_site, parse_llms_txt_links
-from sensei.types import ContentTypeWarning, Domain, IngestResult, Success, TransientError
+from sensei.types import (
+    ContentTypeWarning,
+    Domain,
+    IngestResult,
+    NoLLMsTxt,
+    NotFoundWarning,
+    Success,
+    TransientError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +124,7 @@ def flatten_section_tree(
     return sections
 
 
-async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResult]:
+async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResult] | NoLLMsTxt:
     """Ingest documentation from a domain's llms.txt file.
 
     Fetches /llms.txt from the domain, parses it to extract links, then crawls
@@ -137,6 +145,7 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
 
     Returns:
         Success[IngestResult] with counts of documents processed
+        NoLLMsTxt if the domain does not have an /llms.txt file
 
     Raises:
         TransientError: If the crawl fails due to network issues
@@ -150,9 +159,7 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
     logger.info(f"Starting crawl for {normalized_domain} with generation {generation_id}")
 
     # Start with llms.txt - the standard entry point for documentation
-    initial_urls = [
-        f"https://{normalized_domain}/llms.txt",
-    ]
+    llms_txt_url = f"https://{normalized_domain}/llms.txt"
 
     # Use MemoryStorageClient to avoid filesystem race conditions between crawls
     # This eliminates the need for cleanup and prevents state conflicts
@@ -262,10 +269,12 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
         """
         url = context.request.url
 
-        # 404s are expected (dead links in docs)
+        # 404s are expected (dead links in docs) - wrap with URL, chain original
         if isinstance(error, HttpStatusCodeError) and error.status_code == 404:
-            logger.warning(f"Dead link (404): {url}")
-            result.warnings.append(error)
+            logger.warning(f"Not found (404): {url}")
+            warning = NotFoundWarning(url)
+            warning.__cause__ = error  # Preserve original for debugging
+            result.warnings.append(warning)
         # DNS errors are expected (domains disappear, typos in docs)
         elif isinstance(error, TransportError) and "dns error" in str(error).lower():
             logger.warning(f"DNS error (domain not found): {url}")
@@ -277,12 +286,17 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
 
     # Start crawl with llms.txt (depth=0)
     try:
-        initial_requests = [Request.from_url(url, user_data={"depth": 0}) for url in initial_urls]
-        await crawler.run(initial_requests)
+        initial_request = Request.from_url(llms_txt_url, user_data={"depth": 0})
+        await crawler.run([initial_request])
     except Exception as e:
         logger.error(f"Crawl failed for {normalized_domain}: {e}")
         # Don't activate - leave orphan generation for cleanup
         raise TransientError(f"Crawl failed for {normalized_domain}: {e}") from e
+
+    # Check if llms.txt was not found (inspect warnings after crawl)
+    llms_txt_missing = any(isinstance(w, NotFoundWarning) and w.url == llms_txt_url for w in result.warnings)
+    if llms_txt_missing:
+        return NoLLMsTxt(domain=normalized_domain)
 
     # Crawl succeeded - atomically swap to new generation
     await activate_generation(normalized_domain, generation_id)

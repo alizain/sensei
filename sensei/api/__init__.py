@@ -1,7 +1,19 @@
-"""FastAPI server for Sensei."""
+"""REST API server for Sensei.
+
+Provides HTTP endpoints for non-MCP clients:
+- POST /query - Query Sensei for documentation
+- POST /query/stream - Streaming query results (NDJSON)
+- POST /rate - Rate a query response
+- GET /health - Health check
+
+Usage:
+    python -m sensei.api              # HTTP on port 8000
+    python -m sensei.api -p 9000      # Custom port
+"""
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime
 
@@ -11,7 +23,7 @@ from pydantic_ai import messages, run
 from pydantic_ai.exceptions import ModelHTTPError
 
 from sensei import core
-from sensei.server.models import (
+from sensei.api.models import (
     HealthResponse,
     QueryRequest,
     QueryResponse,
@@ -22,13 +34,25 @@ from sensei.types import BrokenInvariant, ToolError, TransientError
 
 logger = logging.getLogger(__name__)
 
-api_app = FastAPI(
-    title="Sensei API",
-    description="HTTP API endpoints",
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ensure database is ready before handling requests."""
+    from sensei.database.local import ensure_db_ready
+
+    await ensure_db_ready()
+    yield
+
+
+app = FastAPI(
+    title="Sensei REST API",
+    description="HTTP API for Sensei documentation agent",
+    version="0.1.0",
+    lifespan=lifespan,
 )
 
 
-@api_app.post("/query", response_model=QueryResponse)
+@app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest) -> QueryResponse:
     """Query Sensei for documentation and code examples.
 
@@ -75,7 +99,7 @@ def _stream_ndjson(data: dict) -> bytes:
     return json.dumps(data, default=_json_default).encode("utf-8") + b"\n"
 
 
-@api_app.post("/query/stream")
+@app.post("/query/stream")
 async def query_stream(request: QueryRequest):
     """Stream query results as NDJSON.
 
@@ -163,7 +187,7 @@ async def query_stream(request: QueryRequest):
     )
 
 
-@api_app.post("/rate", response_model=RatingResponse)
+@app.post("/rate", response_model=RatingResponse)
 async def rate(request: RatingRequest) -> RatingResponse:
     """Rate a Sensei query response.
 
@@ -186,7 +210,7 @@ async def rate(request: RatingRequest) -> RatingResponse:
         raise HTTPException(status_code=500, detail=f"Failed to save rating: {e}")
 
 
-@api_app.get("/health", response_model=HealthResponse)
+@app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Health check endpoint.
 
@@ -198,7 +222,7 @@ async def health() -> HealthResponse:
     return HealthResponse(status="healthy")
 
 
-@api_app.exception_handler(404)
+@app.exception_handler(404)
 async def not_found_handler(request, exc):
     """Custom 404 handler."""
     return JSONResponse(
@@ -207,10 +231,34 @@ async def not_found_handler(request, exc):
     )
 
 
-@api_app.exception_handler(500)
+@app.exception_handler(500)
 async def internal_error_handler(request, exc):
     """Custom 500 handler."""
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
     )
+
+
+def main():
+    """Entry point for `python -m sensei.api`."""
+    import argparse
+
+    import uvicorn
+
+    parser = argparse.ArgumentParser(prog="sensei.api", description="Sensei REST API server")
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind to (default: 8000)",
+    )
+
+    args = parser.parse_args()
+    uvicorn.run(app, host=args.host, port=args.port)

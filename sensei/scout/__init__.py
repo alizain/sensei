@@ -14,10 +14,10 @@ staleness handling for branches.
 All file discovery uses ripgrep/lstr which respect .gitignore by default.
 
 Usage as MCP server:
-    from sensei.scout import scout
-    scout.run()  # stdio transport
+    from sensei.scout import mcp
+    mcp.run()  # stdio transport
     # or
-    app = scout.http_app(path="/scout")  # HTTP transport
+    app = mcp.http_app(path="/scout")  # HTTP transport
 
 Usage as library:
     from sensei.scout import with_repo, glob_files, grep_files
@@ -41,11 +41,11 @@ from .operations import (
 # DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
 # from .repomap import RepoMapWrapper, generate_repo_map
 
-from .server import main, scout
+from .server import main, mcp
 
 __all__ = [
     # Server
-    "scout",
+    "mcp",
     "main",
     # Manager
     "RepoManager",

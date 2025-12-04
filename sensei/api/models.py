@@ -1,4 +1,4 @@
-"""Pydantic models for FastAPI request/response."""
+"""Pydantic models for REST API request/response."""
 
 from pydantic import BaseModel, ConfigDict, Field
 

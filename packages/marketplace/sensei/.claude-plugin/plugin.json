@@ -7,11 +7,6 @@
 	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
 	"license": "MIT",
 	"mcpServers": {
-		"kura": {
-			"args": ["--from", "sensei-ai", "kura"],
-			"command": "uvx",
-			"type": "stdio"
-		},
 		"scout": {
 			"args": ["--from", "sensei-ai", "scout"],
 			"command": "uvx",

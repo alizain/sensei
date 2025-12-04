@@ -1,64 +1,57 @@
-"""Main application combining API and MCP servers."""
+"""Unified MCP server for Sensei.
+
+Mounts all sub-servers into a single MCP endpoint:
+- sensei_query, sensei_feedback (core)
+- scout_glob, scout_read, scout_grep, scout_tree
+- kura_search, kura_get
+- tome_get, tome_search
+
+Usage:
+    python -m sensei              # stdio (default)
+    python -m sensei -t http      # HTTP on port 8000
+    python -m sensei -t sse -p 9000
+"""
 
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastmcp import FastMCP
 from fastmcp.utilities.logging import configure_logging
 
-from sensei.kura import kura
-from sensei.scout import scout
-from sensei.server.api import api_app
-from sensei.server.mcp import mcp
-from sensei.tome.server import tome
+from sensei.cli import run_server
+from sensei.kura import mcp as kura_mcp
+from sensei.scout import mcp as scout_mcp
+from sensei.server import mcp as sensei_mcp
+from sensei.tome import mcp as tome_mcp
 
-# Configure logging (after imports, before app creation)
+# Configure logging
 configure_logging(level="DEBUG")  # fastmcp logger
 configure_logging(level="DEBUG", logger=logging.getLogger("sensei"))  # sensei logger
 
-# Quiet noisy libraries (commented out until needed)
-# logging.getLogger("httpx").setLevel(logging.INFO)
-# logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
-
-mcp_app = mcp.http_app(path="/mcp", stateless_http=True)
-scout_mcp_app = scout.http_app(path="/scout/mcp", stateless_http=True)
-kura_mcp_app = kura.http_app(path="/kura/mcp", stateless_http=True)
-tome_mcp_app = tome.http_app(path="/tome/mcp", stateless_http=True)
-
 
 @asynccontextmanager
-async def combined_lifespan(app: FastAPI):
-    """Combined lifespan: database init + MCP session managers."""
-    # Ensure database is ready first (idempotent - individual service lifespans will no-op)
+async def lifespan(server):
+    """Ensure database is ready before handling MCP requests."""
     from sensei.database.local import ensure_db_ready
 
     await ensure_db_ready()
-
-    async with mcp_app.lifespan(app):
-        async with scout_mcp_app.lifespan(app):
-            async with kura_mcp_app.lifespan(app):
-                async with tome_mcp_app.lifespan(app):
-                    yield
+    yield
 
 
-# Create combined app
-app = FastAPI(
-    title="Sensei",
-    description="Intelligent documentation agent for AI coding assistants",
-    version="0.1.0",
-    routes=[
-        *mcp_app.routes,  # MCP routes at /mcp/*
-        *scout_mcp_app.routes,  # Scout routes at /scout/mcp/*
-        *kura_mcp_app.routes,  # Kura routes at /kura/mcp/*
-        *tome_mcp_app.routes,  # Tome routes at /tome/mcp/*
-        *api_app.routes,  # API routes at /query, /rate, /health
-    ],
-    lifespan=combined_lifespan,
-)
+# Create unified MCP server
+mcp = FastMCP(name="sensei", lifespan=lifespan)
+
+# Mount all sub-servers with prefixes
+mcp.mount(sensei_mcp, prefix="sensei")
+mcp.mount(scout_mcp, prefix="scout")
+mcp.mount(kura_mcp, prefix="kura")
+mcp.mount(tome_mcp, prefix="tome")
 
 
-def run():
-    """Run the combined Sensei HTTP server."""
-    import uvicorn
+def main():
+    """Entry point for `python -m sensei`."""
+    run_server(mcp, "sensei", "Unified Sensei MCP server")
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+if __name__ == "__main__":
+    main()

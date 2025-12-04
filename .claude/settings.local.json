@@ -42,7 +42,11 @@
 			"WebFetch(domain:render.com)",
 			"WebFetch(domain:www.firecrawl.dev)",
 			"WebSearch",
-			"mcp__plugin_sensei_scout__glob"
+			"mcp__plugin_sensei_scout__glob",
+			"mcp__plugin_sensei_scout__tree",
+			"mcp__plugin_sensei_kura__search",
+			"mcp__plugin_sensei_kura__get",
+			"mcp__plugin_sensei_tome__get"
 		],
 		"ask": [],
 		"deny": []

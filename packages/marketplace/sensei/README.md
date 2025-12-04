@@ -32,9 +32,13 @@ Do NOT attempt documentation research yourself. Always delegate to sensei for ac
 
 ## Available Tools
 
+### Sensei (Core)
+
+- `sensei_query` - Query Sensei for documentation and code examples
+- `sensei_feedback` - Rate responses to improve quality
+
 ### Scout (Repository Exploration)
 
-- `scout_repo_map` - Structural overview of a repo (classes, functions, signatures)
 - `scout_glob` - Find files by pattern
 - `scout_read` - Read file contents
 - `scout_grep` - Search for patterns with context
@@ -45,19 +49,28 @@ Do NOT attempt documentation research yourself. Always delegate to sensei for ac
 - `kura_search` - Search cached documentation responses
 - `kura_get` - Retrieve a cached response by ID
 
+### Tome (llms.txt Documentation)
+
+- `tome_get` - Get documentation from an llms.txt domain
+- `tome_search` - Search documentation within an llms.txt domain
+
 ## Running the Server
 
 ```bash
-# Install sensei
-uvx --from sensei scout  # or pip install sensei
+# Unified MCP server (stdio - for Claude Desktop, etc.)
+python -m sensei
 
-# Run the server
-uvicorn sensei:app --host 0.0.0.0 --port 8000
+# Unified MCP server (HTTP)
+python -m sensei -t http --port 8000
+
+# REST API server (HTTP)
+python -m sensei.api --port 8000
 ```
 
-Or run individual MCP servers in stdio mode:
+Or run individual MCP servers:
 
 ```bash
-uvx --from sensei scout  # Scout MCP server
-uvx --from sensei kura   # Kura MCP server
+python -m sensei.scout   # Scout MCP server (stdio)
+python -m sensei.kura    # Kura MCP server (stdio)
+python -m sensei.tome    # Tome MCP server (stdio)
 ```

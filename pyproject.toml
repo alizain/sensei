@@ -39,7 +39,8 @@ Homepage = "https://github.com/alizain/sensei"
 Repository = "https://github.com/alizain/sensei"
 
 [project.scripts]
-sensei = "sensei.__main__:run"
+sensei = "sensei.__main__:main"
+sensei-api = "sensei.api:main"
 scout = "sensei.scout:main"
 kura = "sensei.kura:main"
 tome = "sensei.tome:main"
