@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
+import logfire
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.google import GoogleModel
@@ -11,6 +12,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.google import GoogleProvider
 from pydantic_ai.providers.grok import GrokProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from sensei import deps as deps_module
 from sensei.config import settings
@@ -19,13 +21,16 @@ from sensei.prompts import build_prompt
 from sensei.tools.common import wrap_tool
 from sensei.tools.context7 import create_context7_server
 from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
-from sensei.tools.kura import create_kura_server
 from sensei.tools.scout import create_scout_server
 from sensei.tools.tavily import create_tavily_server
 from sensei.tools.tome import create_tome_server
 from sensei.types import ToolError
 
 logger = logging.getLogger(__name__)
+
+logfire.configure()
+logfire.instrument_pydantic_ai()
+logfire.instrument_httpx(capture_all=True)
 
 Agent.instrument_all()
 
@@ -64,12 +69,13 @@ grok_model = OpenAIChatModel(
     provider=GrokProvider(api_key=settings.grok_api_key),
 )
 
+chatgpt_model = OpenAIChatModel("", provider=OpenAIProvider(api_key=""))
+
 haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=settings.anthropic_api_key))
 
 gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=settings.google_api_key))
 
-# Default model for all agents
-DEFAULT_MODEL = gemini_model
+DEFAULT_MODEL = grok_model
 
 
 # =============================================================================
@@ -201,7 +207,7 @@ def create_agent(
             create_context7_server(settings.context7_api_key),
             create_tavily_server(settings.tavily_api_key),
             create_scout_server(),
-            create_kura_server(),
+            # create_kura_server(),
             create_tome_server(),
         ],
         tools=tools,

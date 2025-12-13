@@ -1,5 +1,6 @@
 # Logs
 fastapi.log
+eval_context_*
 
 # Aider
 .aider*

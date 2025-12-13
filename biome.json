@@ -26,7 +26,8 @@
 			"!!**/priv/static",
 			"!!**/package-lock.json",
 			"!!**/worker-configuration.d.ts"
-		]
+		],
+		"maxSize": 5242880
 	},
 	"formatter": {
 		"attributePosition": "multiline",

@@ -40,6 +40,20 @@ class Settings(BaseSettings):
         description="Tavily API key for MCP server",
     )
 
+    # Observability
+    langfuse_public_key: str = Field(
+        default="",
+        description="Langfuse public key for production tracing",
+    )
+    langfuse_secret_key: str = Field(
+        default="",
+        description="Langfuse secret key for production tracing",
+    )
+    langfuse_host: str = Field(
+        default="https://us.cloud.langfuse.com",
+        description="Langfuse host URL",
+    )
+
     # Database
     database_url: str = Field(
         default_factory=get_local_database_url,

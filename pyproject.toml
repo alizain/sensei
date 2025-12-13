@@ -25,6 +25,7 @@ dependencies = [
     "greenlet>=3.2.4",
     "httpx>=0.28.1",
     "langfuse>=3.10.5",
+    "logfire>=4.15.1",
     "mcp>=1.22.0",
     "pydantic-ai>=1.22.0",
     "pydantic-evals[logfire]",
