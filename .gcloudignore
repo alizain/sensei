@@ -1,21 +1,55 @@
-.git
+# Git
+.git/
 .gitignore
+.gitattributes
+
+# Python
 __pycache__/
 *.py[cod]
-.venv/
 *.egg-info/
+.venv/
+.venv-*/
+dist/
+
+# Node
+node_modules/
+packages/
+
+# Caches
+.ruff_cache/
+.pytest_cache/
+.uv-cache/
+.mypy_cache/
+
+# IDE
 .idea/
 .vscode/
+*.swp
 
 # Project specific
 .beads/
 .scout/
 .env
+.env.*
 *.db
 sensei.db
 
 # Tests
 tests/
 
-# Docs (keep README.md for pyproject.toml)
+# Docs
 docs/
+*.md
+!README.md
+
+# Build artifacts
+*.tar.gz
+*.whl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent files
+.agent/
+history/
