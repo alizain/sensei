@@ -4,7 +4,6 @@ import json
 import logging
 from datetime import datetime, timezone
 
-import logfire
 from pydantic_ai import Agent, RunContext, Tool
 
 from sensei import deps as deps_module
@@ -23,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 # Configure logfire only if token is available
 if general_settings.logfire_token:
+    import logfire
+
     logfire.configure(token=general_settings.logfire_token, service_name=general_settings.logfire_service_name)
     logfire.instrument_pydantic_ai()
     Agent.instrument_all()
@@ -51,24 +52,6 @@ async def prefetch_cache_hits(ctx: RunContext[deps_module.Deps]) -> str:
         lines.append(f"- **{hit.id}**{lib_str} ({age_str}): {query_truncated}")
     lines.append("\nUse `kura_get(query_id)` to retrieve full answer if relevant.\n")
     return "\n".join(lines)
-
-
-# =============================================================================
-# Model Definitions
-# =============================================================================
-
-# grok_model = OpenAIChatModel(
-#     "grok-4-1-fast-reasoning",
-#     provider=GrokProvider(api_key=general_settings.grok_api_key),
-# )
-
-# chatgpt_model = OpenAIChatModel("", provider=OpenAIProvider(api_key=""))
-
-# haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=general_settings.anthropic_api_key))
-
-# gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=general_settings.google_api_key))
-
-# DEFAULT_MODEL = grok_model
 
 
 # =============================================================================

@@ -11,7 +11,3 @@ For sub-modules:
     from sensei.scout import mcp as scout_mcp
     from sensei.tome import mcp as tome_mcp
 """
-
-from sensei.unified import mcp
-
-__all__ = ["mcp"]

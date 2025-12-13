@@ -83,21 +83,18 @@ class GeneralSettings(BaseSettings):
         description="Logfire write token for tracing",
     )
     logfire_service_name: str = Field(
-        default="sensei",
+        default="",
         description="Service name for Logfire tracing",
     )
 
     # [Observability] Langfuse
-    langfuse_public_key: str = Field(
-        default="",
-        description="Langfuse public key for production tracing"
-    )
+    langfuse_public_key: str = Field(default="", description="Langfuse public key for production tracing")
     langfuse_secret_key: str = Field(
         default="",
         description="Langfuse secret key for production tracing",
     )
-    langfuse_host: str = Field(
-        default="https://us.cloud.langfuse.com",
+    langfuse_base_url: str = Field(
+        default="",
         description="Langfuse host URL",
     )
 
@@ -112,15 +109,16 @@ class SenseiSettings(BaseSettings):
     )
 
     # LLM model
-    model: str = Field(
-        default="grok:grok-4-1-fast-reasoning",
-        description="Which model & provider to use"
-    )
+    model: str = Field(default="", description="Which model & provider to use")
 
     # Database
     database_url: str = Field(
         default_factory=get_local_database_url,
         description="Database connection URL (defaults to local PostgreSQL via Unix socket)",
+    )
+    database_auto_migrate: bool = Field(
+        default=True,
+        description="Run database migrations on startup",
     )
 
     @property

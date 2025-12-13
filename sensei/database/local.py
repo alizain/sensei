@@ -118,9 +118,8 @@ async def ensure_migrated() -> None:
     # Build alembic config programmatically (works when installed as package)
     config = Config()
     config.set_main_option("script_location", "sensei:migrations")
-    # Alembic needs sync URL (no +asyncpg)
-    sync_url = sensei_settings.database_url.replace("+asyncpg", "")
-    config.set_main_option("sqlalchemy.url", sync_url)
+    # env.py uses async_engine_from_config, so keep +asyncpg in URL
+    config.set_main_option("sqlalchemy.url", sensei_settings.database_url)
 
     # Run migrations (sync operation, run in thread pool)
     logger.info("Running database migrations...")
@@ -141,9 +140,13 @@ async def ensure_db_ready() -> None:
     to skip work on subsequent calls (e.g., when called from both
     combined_lifespan and individual service lifespans).
 
-    Behavior:
-    - External DB (DATABASE_URL set): Do nothing (user's responsibility)
-    - Local DB (DATABASE_URL not set): Start PG if needed, run migrations
+    Behavior matrix:
+    | DATABASE_URL | auto_migrate | Behavior                              |
+    |--------------|--------------|---------------------------------------|
+    | Not set      | True         | Start PG, migrate                     |
+    | Not set      | False        | Warn, ignore, start PG, migrate anyway|
+    | Set          | True         | Connect, migrate                      |
+    | Set          | False        | Connect only                          |
     """
     global _db_ready
 
@@ -153,32 +156,37 @@ async def ensure_db_ready() -> None:
 
     from sensei.settings import sensei_settings
 
-    if sensei_settings.is_external_database:
-        # External DB - user is responsible for setup and migrations
-        _db_ready = True
-        return
+    should_migrate = sensei_settings.database_auto_migrate
 
-    # Sensei-managed mode: ensure PostgreSQL is running
-    if not check_postgres_installed():
-        raise BrokenInvariant(
-            "PostgreSQL not found. Please install PostgreSQL 17+:\n"
-            "  macOS:   brew install postgresql@17\n"
-            "  Ubuntu:  sudo apt install postgresql-17\n"
-            "  Windows: https://www.postgresql.org/download/windows/"
-        )
+    if not sensei_settings.is_external_database:
+        # Sensei-managed mode - must migrate regardless of setting
+        if not should_migrate:
+            logger.warning(
+                "database_auto_migrate=False ignored for sensei-managed database; "
+                "migrations are required when sensei manages PostgreSQL"
+            )
+            should_migrate = True
 
-    if not is_initialized():
-        try:
-            init_db()
-        except subprocess.CalledProcessError:
-            # Another process may have initialized - check again
-            if not is_initialized():
-                raise  # Real failure
-    elif not is_running():
-        start()  # pg_ctl start is safe to call concurrently
+        if not check_postgres_installed():
+            raise BrokenInvariant(
+                "PostgreSQL not found. Please install PostgreSQL 17+:\n"
+                "  macOS:   brew install postgresql@17\n"
+                "  Ubuntu:  sudo apt install postgresql-17\n"
+                "  Windows: https://www.postgresql.org/download/windows/"
+            )
 
-    # Run migrations for local DB
-    await ensure_migrated()
+        if not is_initialized():
+            try:
+                init_db()
+            except subprocess.CalledProcessError:
+                # Another process may have initialized - check again
+                if not is_initialized():
+                    raise  # Real failure
+        elif not is_running():
+            start()  # pg_ctl start is safe to call concurrently
+
+    if should_migrate:
+        await ensure_migrated()
 
     _db_ready = True
     logger.info("Database ready")
