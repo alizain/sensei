@@ -3,7 +3,13 @@
 		"name": "Alizain Feerasta"
 	},
 	"description": "Documentation research methodology and tools for finding the right answers",
-	"keywords": ["documentation", "research", "sensei", "context7", "tavily"],
+	"keywords": [
+		"documentation",
+		"research",
+		"sensei",
+		"context7",
+		"tavily"
+	],
 	"license": "MIT",
 	"mcpServers": {
 		"sensei": {
@@ -13,6 +19,8 @@
 	},
 	"name": "sensei",
 	"repository": "https://github.com/803/sensei",
-	"skills": ["./skills/documentation-research/SKILL.md"],
-	"version": "1.4.2"
+	"skills": [
+		"./skills/documentation-research/SKILL.md"
+	],
+	"version": "1.4.3"
 }

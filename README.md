@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![Version](https://img.shields.io/badge/version-1.4.2-green.svg)](https://github.com/803/sensei)
+[![Version](https://img.shields.io/badge/version-1.4.3-green.svg)](https://github.com/803/sensei)
 
 **Intelligent documentation agent for AI coding assistants**
 
