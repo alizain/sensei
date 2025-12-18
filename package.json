@@ -27,7 +27,7 @@
 		"tsc": "npx tsc --build"
 	},
 	"type": "module",
-	"version": "1.4.1",
+	"version": "1.4.2",
 	"workspaces": [
 		"packages/*"
 	]
