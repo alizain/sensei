@@ -31,6 +31,7 @@ primary_region = 'ord'
   source = "sensei_data"
   destination = "/data"
   initial_size = "1gb"
+  processes = ["app"]
 
 [[vm]]
   memory = '1gb'
