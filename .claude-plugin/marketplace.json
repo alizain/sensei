@@ -1,0 +1,14 @@
+{
+	"name": "sensei-marketplace",
+	"owner": {
+		"email": "alizain@eightzerothree.co",
+		"name": "803 Inc."
+	},
+	"plugins": [
+		{
+			"description": "Documentation research agent",
+			"name": "sensei",
+			"source": "./packages/sensei-claude-code"
+		}
+	]
+}

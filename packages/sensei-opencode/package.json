@@ -1,0 +1,21 @@
+{
+	"description": "Sensei research tools + plugin for OpenCode",
+	"files": [
+		"dist/**",
+		"README.md"
+	],
+	"license": "MIT",
+	"name": "@sensei-ai/opencode",
+	"repository": {
+		"directory": "packages/sensei-opencode",
+		"type": "git",
+		"url": "https://github.com/803/sensei"
+	},
+	"scripts": {
+		"build": "node ./scripts/build.mjs",
+		"check": "tsc -p tsconfig.json --noEmit",
+		"clean": "node ./scripts/clean.mjs"
+	},
+	"type": "module",
+	"version": "1.5.1"
+}

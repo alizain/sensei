@@ -1,0 +1,28 @@
+repos:
+  - repo: local
+    hooks:
+      - id: sync-versions
+        name: Sync versions across files
+        entry: uv run python scripts/sync_versions.py
+        language: system
+        files: ^pyproject\.toml$
+        pass_filenames: false
+
+      - id: ruff-check
+        name: Ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+
+      - id: biome
+        name: Biome check
+        entry: npm run biome
+        language: system
+        types_or: [javascript, jsx, ts, tsx, json, css]
+        pass_filenames: false

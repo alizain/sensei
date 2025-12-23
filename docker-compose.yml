@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: sensei-postgres
+    environment:
+      POSTGRES_USER: sensei
+      POSTGRES_PASSWORD: sensei
+      POSTGRES_DB: sensei
+    ports:
+      - "5432:5432"

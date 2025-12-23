@@ -1,0 +1,5 @@
+{
+	"permissions": {
+		"allow": ["mcp__plugin_sensei_sensei__scout_grep"]
+	}
+}

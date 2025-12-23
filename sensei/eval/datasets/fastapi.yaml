@@ -1,0 +1,37 @@
+name: fastapi
+
+cases:
+  - name: fastapi-dependency-injection-01
+    inputs: "How do I use dependency injection in FastAPI?"
+    metadata:
+      tags: [fastapi, api-usage]
+
+  - name: fastapi-background-tasks-01
+    inputs: "How do I run background tasks in FastAPI?"
+    metadata:
+      tags: [fastapi, api-usage]
+
+  - name: fastapi-websockets-01
+    inputs: "How do I implement WebSocket endpoints in FastAPI?"
+    metadata:
+      tags: [fastapi, api-usage]
+
+  - name: fastapi-testing-01
+    inputs: "How do I write tests for FastAPI endpoints?"
+    metadata:
+      tags: [fastapi, testing]
+
+  - name: fastapi-auth-jwt-01
+    inputs: "How do I implement JWT authentication in FastAPI?"
+    metadata:
+      tags: [fastapi, authentication]
+
+  - name: fastapi-middleware-01
+    inputs: "How do I create custom middleware in FastAPI?"
+    metadata:
+      tags: [fastapi, api-usage]
+
+  - name: fastapi-validation-01
+    inputs: "How do I add custom validation to Pydantic models in FastAPI?"
+    metadata:
+      tags: [fastapi, validation]

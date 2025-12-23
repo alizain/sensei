@@ -1,0 +1,37 @@
+name: react
+
+cases:
+  - name: react-useeffect-01
+    inputs: "How do I use useEffect for data fetching in React?"
+    metadata:
+      tags: [react, hooks]
+
+  - name: react-context-01
+    inputs: "How do I share state between components using React Context?"
+    metadata:
+      tags: [react, state-management]
+
+  - name: react-suspense-01
+    inputs: "How do I implement lazy loading with React Suspense?"
+    metadata:
+      tags: [react, performance]
+
+  - name: react-forms-01
+    inputs: "What's the best way to handle form state in React?"
+    metadata:
+      tags: [react, forms]
+
+  - name: react-testing-01
+    inputs: "How do I test React components with React Testing Library?"
+    metadata:
+      tags: [react, testing]
+
+  - name: react-usememo-01
+    inputs: "When should I use useMemo and useCallback in React?"
+    metadata:
+      tags: [react, performance]
+
+  - name: react-error-boundaries-01
+    inputs: "How do I implement error boundaries in React?"
+    metadata:
+      tags: [react, error-handling]

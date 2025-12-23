@@ -1,0 +1,76 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-*/
+dist/
+
+# Node
+node_modules/
+packages/
+
+# Caches
+.ruff_cache/
+.pytest_cache/
+.uv-cache/
+.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Project specific
+.beads/
+.scout/
+.env
+.env.*
+*.db
+sensei.db
+
+# Tests
+tests/
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Build artifacts
+*.tar.gz
+*.whl
+*.egg-info/
+dist/
+
+# Not needed for deployment
+deploy.sh
+docker-compose.yml
+biome.json
+package.json
+package-lock.json
+tsconfig*.json
+turbo.json
+scripts/
+notes/
+python_modules/
+.pre-commit-config.yaml
+.editorconfig
+.github/
+logo.txt
+mise.toml
+tome-seeds.txt
+alembic.ini
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Agent files
+.agent/
+history/

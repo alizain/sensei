@@ -1,0 +1,37 @@
+name: general
+
+cases:
+  - name: general-pdyantic-01
+    inputs: "How can I use langfuse and logfire together as instrumentation in pydanticAI?"
+    metadata:
+      tags: [pydantic, langfuse, logfire]
+
+  - name: general-async-await-01
+    inputs: "How do async/await and promises work in JavaScript?"
+    metadata:
+      tags: [fundamentals]
+
+  - name: general-git-rebase-01
+    inputs: "What's the difference between git merge and git rebase?"
+    metadata:
+      tags: [tooling]
+
+  - name: general-rest-api-01
+    inputs: "What are best practices for designing RESTful APIs?"
+    metadata:
+      tags: [architecture]
+
+  - name: general-typescript-generics-01
+    inputs: "How do I use generics in TypeScript?"
+    metadata:
+      tags: [fundamentals]
+
+  - name: general-docker-compose-01
+    inputs: "How do I set up a multi-container application with Docker Compose?"
+    metadata:
+      tags: [devops]
+
+  - name: general-sql-indexing-01
+    inputs: "When should I create indexes on database tables?"
+    metadata:
+      tags: [databases]

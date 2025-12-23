@@ -1,0 +1,96 @@
+[project]
+name = "sensei-ai"
+version = "1.5.1"
+description = "Intelligent documentation agent for AI coding assistants"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+authors = [{ name = "alizain" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    # "aider-chat>=0.86.1",  # DISABLED: conflicts with pydantic-ai (openai version mismatch)
+    "alembic>=1.14.0",
+    "anthropic>=0.75.0",
+    "asyncpg>=0.31.0",
+    "crawlee[httpx]>=0.6.0",
+    "dspy>=3.0.4",
+    "fastapi-cli[standard]>=0.0.16",
+    "fastapi[standard]>=0.122.0",
+    "fastmcp>=2.13.3",
+    "greenlet>=3.2.4",
+    "httpx>=0.28.1",
+    "langfuse>=3.10.5",
+    "logfire>=4.15.1",
+    "mcp>=1.22.0",
+    "pydantic-ai>=1.22.0",
+    "pydantic-evals[logfire]",
+    "pydantic-settings>=2.11.7",
+    "pydantic>=2.11.7",
+    "ruff>=0.14.6",
+    "sentry-sdk[asyncpg,fastapi,httpx,pydantic-ai,sqlalchemy,starlette]>=2.48.0",
+    "slowapi>=0.1.9",
+    "sqlalchemy[asyncio]>=2.0.44",
+    "tldextract>=5.1.0",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/803/sensei"
+Repository = "https://github.com/803/sensei"
+
+[project.scripts]
+sensei-ai = "sensei.__main__:main"
+start = "sensei.api.__main__:main"
+scout = "sensei.scout:main"
+kura = "sensei.kura:main"
+tome = "sensei.tome:main"
+dojo = "sensei.dojo:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["sensei*"]
+
+[tool.setuptools.package-data]
+sensei = [
+    "migrations/*.py",
+    "migrations/*.mako",
+    "migrations/versions/*.py",
+]
+
+[tool.ruff]
+line-length = 120
+extend-include = ["docs/**/*.py"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.0.0",
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# log_cli = true
+# log_cli_level = "WARN"
+markers = [
+    "integration: marks tests as integration tests (require real network)",
+]
